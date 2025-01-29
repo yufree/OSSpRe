@@ -1156,3 +1156,8 @@ par(mar=c(0,0,0,0))
 plot(xy$x,xy$y,col=as.vector(pr),cex=0.01,pch=19)
 dev.off()
 ```
+
+```{r}
+sessionInfo()
+```
+
