@@ -4,7 +4,7 @@ This document is the reproducible code for timsToF MSI workflow. To access stand
 
 # Install the packages needed for this workflow
 
-We use renv package to restore the packages needed for this workflow.
+We use renv package to restore all the R packages needed for this workflow.
 
 ```r
 install.packages('renv')
@@ -31,12 +31,12 @@ peakalign.cpp: script to extract peaks with reference peaks list across pixels.
 
 # Usage
 
-- Line 26: Change `path = 'PATH_TO_RAW.d'` to the .D folder path of raw data. If your data size must be less that the 10 times of your memory size. For example, if your .D folder is 20GB, you need 200GB memory to run this workflow. It's better to run this workflow on HPC or Cloud.
+- Line 26: Change `path = 'PATH_TO_RAW.d'` to the .D folder path of raw data. If your data size must be less that the half of your memory size. For example, if your .D folder is 20GB, you need at least 40GB memory to run this workflow. It's better to run this workflow on HPC or Cloud.
 
 - Line 28: accept Bruker's lisence to download so/dll file  `accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE`
 
 - (optional) Line 41: set the x and y range for the pixels to be extracted
 
-- Run `rmarkdown::render('workflow.Rmd')` or click knit button within RStudio to run the workflow. Or you could run each code chunk according to the description/comments.
+- Run `rmarkdown::render('workflow.Rmd')` in console or click knit button within RStudio to run the workflow. Or you could run each code chunk according to the description/comments.
 
 
