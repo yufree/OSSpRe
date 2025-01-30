@@ -233,17 +233,6 @@
       ],
       "Hash": "55259706a0783463e937c71b998407b7"
     },
-    "KernSmooth": {
-      "Package": "KernSmooth",
-      "Version": "2.23-26",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "stats"
-      ],
-      "Hash": "2fb39782c07b5ad422b0448ae83f64c4"
-    },
     "MASS": {
       "Package": "MASS",
       "Version": "7.3-64",
@@ -263,7 +252,7 @@
       "Package": "Matrix",
       "Version": "1.7-2",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "grDevices",
@@ -413,16 +402,6 @@
         "utils"
       ],
       "Hash": "20149fcead4dd6f9da3605f98b5220fc"
-    },
-    "SimpleITK": {
-      "Package": "SimpleITK",
-      "Version": "2.3.0",
-      "Source": "unknown",
-      "Requirements": [
-        "R",
-        "methods"
-      ],
-      "Hash": "625fc70eff150cb079f3b14a98a71f88"
     },
     "UCSC.utils": {
       "Package": "UCSC.utils",
@@ -589,35 +568,6 @@
       ],
       "Hash": "cd9a672193789068eb5a2aad65a0dedf"
     },
-    "class": {
-      "Package": "class",
-      "Version": "7.3-23",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "MASS",
-        "R",
-        "stats",
-        "utils"
-      ],
-      "Hash": "d0cb9cc838c3b43560bd958fc4317fdc"
-    },
-    "classInt": {
-      "Package": "classInt",
-      "Version": "0.4-11",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "KernSmooth",
-        "R",
-        "class",
-        "e1071",
-        "grDevices",
-        "graphics",
-        "stats"
-      ],
-      "Hash": "f2af70314a63d7f025ae668f08bd933a"
-    },
     "cli": {
       "Package": "cli",
       "Version": "3.6.3",
@@ -692,7 +642,7 @@
       "Package": "curl",
       "Version": "6.2.0",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R"
       ],
@@ -713,7 +663,7 @@
       "Package": "dbscan",
       "Version": "1.2.2",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "Rcpp",
@@ -767,22 +717,6 @@
         "vctrs"
       ],
       "Hash": "fedd9d00c2944ff00a0e2696ccf048ec"
-    },
-    "e1071": {
-      "Package": "e1071",
-      "Version": "1.7-16",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "class",
-        "grDevices",
-        "graphics",
-        "methods",
-        "proxy",
-        "stats",
-        "utils"
-      ],
-      "Hash": "27a09ca40266a1066d62ef5402dd51d6"
     },
     "enviGCMS": {
       "Package": "enviGCMS",
@@ -1066,7 +1000,7 @@
       "Package": "graphlayouts",
       "Version": "1.2.2",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "Rcpp",
@@ -1176,7 +1110,7 @@
       "Package": "igraph",
       "Version": "2.1.4",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "Matrix",
         "R",
@@ -1442,7 +1376,7 @@
       "Package": "nlme",
       "Version": "3.1-167",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "graphics",
@@ -1464,14 +1398,13 @@
     },
     "opentimsr": {
       "Package": "opentimsr",
-      "Version": "1.0.14",
+      "Version": "1.0.16",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "opentims",
-      "RemoteUsername": "sneumann",
-      "RemoteRef": "fix/issue25",
-      "RemoteSha": "d9d2209062e348e53745c2144d953853f59622cd",
+      "RemoteUsername": "michalsta",
+      "RemoteSha": "9a2f39e44a4ac37956d5e0ea71e8b8a494e84c36",
       "RemoteSubdir": "opentimsr",
       "Requirements": [
         "DBI",
@@ -1480,7 +1413,7 @@
         "Rcpp",
         "methods"
       ],
-      "Hash": "c7b7535cb71747dff5ca4cc7d51ca771"
+      "Hash": "abb1a18999bbd8b2f1098d85ccc8b115"
     },
     "patchwork": {
       "Package": "patchwork",
@@ -1618,18 +1551,6 @@
       ],
       "Hash": "c84fd4f75ea1f5434735e08b7f50fbca"
     },
-    "proxy": {
-      "Package": "proxy",
-      "Version": "0.4-27",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "stats",
-        "utils"
-      ],
-      "Hash": "e0ef355c12942cf7a6b91a6cfaea8b3e"
-    },
     "purrr": {
       "Package": "purrr",
       "Version": "1.0.2",
@@ -1657,13 +1578,13 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "1.0.11",
+      "Version": "1.1.0",
       "Source": "Repository",
       "Repository": "RSPM",
       "Requirements": [
         "utils"
       ],
-      "Hash": "47623f66b4e80b3b0587bc5d7b309888"
+      "Hash": "ac77c97ee12af521e554e9b015b80861"
     },
     "reticulate": {
       "Package": "reticulate",
@@ -1724,12 +1645,17 @@
     "rmwf": {
       "Package": "rmwf",
       "Version": "0.1.2",
-      "Source": "Bioconductor",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteUsername": "yufree",
+      "RemoteRepo": "rmwf",
+      "RemoteSha": "536a179a6ca73bacbfd78cbd0627303e8eaa098b",
+      "RemoteHost": "api.github.com",
       "Requirements": [
         "R",
         "jsonlite"
       ],
-      "Hash": "8dc39ad9735e687b87fdeb1c03b9d610"
+      "Hash": "f66fd2b00a9353d63a62bdf96c8ad301"
     },
     "rprojroot": {
       "Package": "rprojroot",
@@ -1740,18 +1666,6 @@
         "R"
       ],
       "Hash": "4c8415e0ec1e29f3f4f6fc108bef0144"
-    },
-    "s2": {
-      "Package": "s2",
-      "Version": "1.1.7",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "Rcpp",
-        "wk"
-      ],
-      "Hash": "3c8013cdd7f1d20de5762e3f97e5e274"
     },
     "sass": {
       "Package": "sass",
@@ -1798,29 +1712,6 @@
         "nlme"
       ],
       "Hash": "3994f48217792f0bb363f0c52167dada"
-    },
-    "sf": {
-      "Package": "sf",
-      "Version": "1.0-19",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "DBI",
-        "R",
-        "Rcpp",
-        "classInt",
-        "grDevices",
-        "graphics",
-        "grid",
-        "magrittr",
-        "methods",
-        "s2",
-        "stats",
-        "tools",
-        "units",
-        "utils"
-      ],
-      "Hash": "fe02eec2f6b3ba0e24afe83d5ccfb528"
     },
     "snow": {
       "Package": "snow",
@@ -1890,7 +1781,7 @@
       "Package": "systemfonts",
       "Version": "1.2.1",
       "Source": "Repository",
-      "Repository": "CRAN",
+      "Repository": "RSPM",
       "Requirements": [
         "R",
         "cpp11",
@@ -2025,17 +1916,6 @@
       ],
       "Hash": "249dae2d91909b98bc93086d82cd7c7f"
     },
-    "units": {
-      "Package": "units",
-      "Version": "0.8-5",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "Rcpp"
-      ],
-      "Hash": "119d19da480e873f72241ff6962ffd83"
-    },
     "utf8": {
       "Package": "utf8",
       "Version": "1.2.4",
@@ -2094,16 +1974,6 @@
         "graphics"
       ],
       "Hash": "cc2d62c76458d425210d1eb1478b30b4"
-    },
-    "wk": {
-      "Package": "wk",
-      "Version": "0.9.4",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R"
-      ],
-      "Hash": "37be35d733130f1de1ef51672cf7cdc0"
     },
     "xfun": {
       "Package": "xfun",
