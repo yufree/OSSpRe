@@ -39,4 +39,15 @@ peakalign.cpp: script to extract peaks with reference peaks list across pixels.
 
 - Run `rmarkdown::render('workflow.Rmd')` in console or click knit button within RStudio to run the workflow. Or you could run each code chunk according to the description/comments.
 
+# HPC usage
+
+Here is the slurm usage for the peak picking process, which will use the most computational resources. To use this workflow, make sure your HPC support slurm and R module is available.
+
+- Reference peak picking (refpeakpicking.R): This is the R script to extract reference peak from super pixel. Check the code the change path for your own data. The output is `ref2d.csv` containing referenced peaks.
+
+- Peak picking (peakpicking.R): This is the R script to extract peak profile with reference peak lists. Check the code the change path for your own data. The output is `ticmzccs.csv` containing processed peaks list across pixels.
+
+- slurm job (msi.job): This is the job file for peak picking process.
+
+*Please check the code and update path for your own data*
 
