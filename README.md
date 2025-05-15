@@ -1,6 +1,6 @@
-# timsMSI
+# OSSpRe
 
-This document is the reproducible code for timsToF MSI workflow. To access standalone timsToF MSI workflow, please install rmwf package from GitHub and use rmarkdown::draft("test.Rmd", template = "MSI", package = "rmwf") to create a reproducible workflow document for your own studies. Such workflow is also available through xcmsrocker project.
+This document is the reproducible code for Open Source Spatial Reactomics (OSSpRe) workflow. To access standalone timsToF MSI workflow, please install rmwf package from GitHub and use rmarkdown::draft("test.Rmd", template = "MSI", package = "rmwf") to create a reproducible workflow document for your own studies. Such workflow is also available through xcmsrocker project.
 
 # Install the packages needed for this workflow
 
