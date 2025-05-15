@@ -1,12 +1,12 @@
 # OSSpRe
 
-This document is the reproducible code for Open Source Spatial Reactomics (OSSpRe) workflow. To access standalone timsToF MSI workflow, please install rmwf package from GitHub and use rmarkdown::draft("test.Rmd", template = "MSI", package = "rmwf") to create a reproducible workflow document for your own studies. Such workflow is also available through xcmsrocker project.
+This document is the reproducible code for Open Source Spatial Reactomics (OSSpRe) workflow.
 
 # Install the packages needed for this workflow
 
 We use renv package to restore all the R packages needed for this workflow.
 
-```r
+``` r
 install.packages('renv')
 renv::restore()
 ```
@@ -31,23 +31,46 @@ peakalign.cpp: script to extract peaks with reference peaks list across pixels.
 
 # Usage
 
-- Line 26: Change `path = 'PATH_TO_RAW.d'` to the .D folder path of raw data. If your data size must be less that the half of your memory size. For example, if your .D folder is 20GB, you need at least 40GB memory to run this workflow. It's better to run this workflow on HPC or Cloud.
+-   Line 26: Change `path = 'PATH_TO_RAW.d'` to the .D folder path of raw data. If your data size must be less that the half of your memory size. For example, if your .D folder is 20GB, you need at least 40GB memory to run this workflow. It's better to run this workflow on HPC or Cloud.
 
-- Line 28: accept Bruker's lisence to download so/dll file  `accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE`
+-   Line 28: accept Bruker's lisence to download so/dll file `accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE`
 
-- (optional) Line 41: set the x and y range for the pixels to be extracted
+-   (optional) Line 41: set the x and y range for the pixels to be extracted
 
-- Run `rmarkdown::render('workflow.Rmd')` in console or click knit button within RStudio to run the workflow. Or you could run each code chunk according to the description/comments.
+-   Run `rmarkdown::render('workflow.Rmd')` in console or click knit button within RStudio to run the workflow. Or you could run each code chunk according to the description/comments.
 
 # HPC usage
 
 Here is the slurm usage for the peak picking process, which will use the most computational resources. To use this workflow, make sure your HPC support slurm and R module is available.
 
-- Reference peak picking (refpeakpicking.R): This is the R script to extract reference peak from super pixel. Check the code the change path for your own data. The output is `ref2d.csv` containing referenced peaks.
+-   Reference peak picking (refpeakpicking.R): This is the R script to extract reference peak from super pixel. Check the code the change path for your own data. The output is `ref2d.csv` containing referenced peaks.
 
-- Peak picking (peakpicking.R): This is the R script to extract peak profile with reference peak lists. Check the code the change path for your own data. The output is `ticmzccs.csv` containing processed peaks list across pixels.
+-   Peak picking (peakpicking.R): This is the R script to extract peak profile with reference peak lists. Check the code the change path for your own data. The output is `ticmzccs.csv` containing processed peaks list across pixels.
 
-- slurm job (msi.job): This is the job file for peak picking process.
+-   slurm job (msi.job): This is the job file for peak picking process.
 
 *Please check the code and update path for your own data*
 
+# Docker usage
+
+OSSpRe workflow is also available through [xcmsrocker](https://github.com/yufree/xcmsrocker) project.
+
+1.  Install Docker and run Docker in your system
+
+2.  Pull the image from DockerHub `docker pull yufree/deepspace:latest`
+
+3.  Run the image `docker run -e PASSWORD=xcmsrocker -p 8787:8787 yufree/xcmsrocker`
+
+4.  Open the browser and visit <http://localhost:8787> or [http://[your-ip-address]:8787](http://%5Byour-ip-address%5D:8787){.uri} to power on RStudio server
+
+Default user name is rstudio and password is xcmsrocker
+
+5.  If you preferred to try OSSpRe workflow, do the following step in RStudio:
+
+-   Go to File - New File - Rmarkdown...
+
+-   Click 'From Template'
+
+-   Choose 'Mass Spectrometry Imaging Workflow' and click OK
+
+You will see a Rmd file with OSSpRe workflow.
