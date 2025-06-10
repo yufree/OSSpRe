@@ -13,8 +13,11 @@ renv::restore()
 # Tutorial
 
 Part 1: Introduction: https://youtu.be/Og9mfW0hsIM
+
 Part 2: Installation: https://youtu.be/e3i_dr6lUCc
+
 Part 3: Rmarkdown work-through: https://youtu.be/Pllsw_4zqoY
+
 Part 4: Shiny application: https://youtu.be/05F8O_G6Z8Q
 
 # Files
