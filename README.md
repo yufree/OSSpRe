@@ -12,11 +12,11 @@ renv::restore()
 ```
 # Tutorial
 
-Part 1: Introduction: https://youtu.be/Og9mfW0hsIM
+Part 1: Introduction: https://youtu.be/j26o3j2B1FI
 
-Part 2: Installation: https://youtu.be/e3i_dr6lUCc
+Part 2: Installation: https://youtu.be/l_3MuLlQbbc
 
-Part 3: Rmarkdown work-through: https://youtu.be/Pllsw_4zqoY
+Part 3: Rmarkdown work-through: https://youtu.be/8pDd_4S36kw
 
 Part 4: Shiny application: https://youtu.be/05F8O_G6Z8Q
 
