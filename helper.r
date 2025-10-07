@@ -1,6 +1,7 @@
 library(opentimsr)
 library(data.table)
 library(Rcpp)
+library(enviGCMS)
 sourceCpp("one_over_k0_to_ccs.cpp")
 sourceCpp('peakalign.cpp')
 sourceCpp("one_over_k0_to_ccs.cpp")
