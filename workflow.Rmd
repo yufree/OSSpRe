@@ -234,24 +234,28 @@ perform_umap_segmentation("ticmzccs.csv", "segmentation.csv")
 
 ## Ion cluster
 
-This part will use cosin/correlation similarity to find ion clusters with similar spatial distribution.
+This part will use cosine/correlation similarity to find ion clusters with similar spatial distribution.
 
 ```{r}
 # This function clusters ions based on their spatial distribution.
 # - "ticmzccs.csv": The input peak file.
-# - "segmentation.csv": The segmentation file.
 # - "ioncluster.csv": The output file for the ion clusters.
-cluster_ions("ticmzccs.csv", "segmentation.csv", "ioncluster.csv")
+# - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
+# - min_cluster_size: screen the cluster with a minimum number of ions
+cluster_ions("ticmzccs.csv", "ioncluster.csv", hclust_cutoff = 0.6, min_cluster_size = 10)
 ```
 
 ###  ROI specific Ion cluster for ions in certain segmentation
 
 ```{r}
-# This function clusters ions within a specific region of interest (ROI).
+# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
 # - "ticmzccs.csv": The input peak file.
 # - "segmentation.csv": The segmentation file.
 # - "roi_ion_cluster.csv": The output file for the ROI ion clusters.
-cluster_roi_ions("ticmzccs.csv", "segmentation.csv", "roi_ion_cluster.csv")
+# - roi_cluster: ROI cluster number.
+# - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
+# - min_cluster_size: minium number of ions in the cluster
+cluster_roi_ions("ticmzccs.csv", "segmentation.csv", "roi_ion_cluster.csv", roi_cluster = 2, hclust_cutoff = 0.8, min_cluster_size = 10)
 ```
 
 ## Reactomics analysis
