@@ -2,6 +2,11 @@ library(opentimsr)
 library(data.table)
 library(Rcpp)
 library(enviGCMS)
+library(irlba)
+library(ClusterR)
+library(reticulate)
+library(umap)
+library(dbscan)
 sourceCpp("one_over_k0_to_ccs.cpp")
 sourceCpp('peakalign.cpp')
 sourceCpp("one_over_k0_to_ccs.cpp")
@@ -150,8 +155,8 @@ getanno <- function(database,mode,peakpath,annofile){
   
   # load ref peaks
   ref <- fread(peakpath)
-  mz <- sapply(strsplit(colnames(ref)[-1],'\_'),function(x) round(as.numeric(x[1]),4))
-  im <- sapply(strsplit(colnames(ref)[-1],'\_'),function(x) as.numeric(x[2]))
+  mz <- sapply(strsplit(colnames(ref)[-1],'\\_'),function(x) round(as.numeric(x[1]),4))
+  im <- sapply(strsplit(colnames(ref)[-1],'\\_'),function(x) as.numeric(x[2]))
   # align
   align <- enviGCMS::getalign(mz,lipid$mz,im,lipid$ccs,ppm=20,deltart = 5)
   anno <- cbind.data.frame(mz=mz[align$xid],im=im[align$xid],db_mz=align$mz2,db_im=align$rt2)
@@ -215,9 +220,6 @@ save_ion_images <- function(peak_file, mz_values) {
 }
 
 perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, n_clusters = 5) {
-  library(data.table)
-  library(irlba)
-  library(ClusterR)
 
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
@@ -226,25 +228,21 @@ perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, 
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
 
   mat <- t(dt_values)
-  svd_result <- irlba(t(mat), nv = n_components)
-  pca_scores <- t(mat) %*% svd_result$v
+  mat_centered <- scale(t(mat), center = TRUE, scale = FALSE)
+  svd_result <- irlba(t(mat_centered), nv = n_components)
+  pca_scores <- t(mat_centered) %*% svd_result$v
 
   km <- KMeans_arma(as.matrix(pca_scores), clusters = n_clusters, n_iter = 10, seed_mode = "random_subset", verbose = TRUE, CENTROIDS = NULL)
   pr <- predict_KMeans(as.matrix(pca_scores), km)
 
-  plot(pca_scores[, 1], pca_scores[, 2], col = pr, pch = 13, cex = 0.1, xlab = 'PC_1', ylab = 'PC_2')
-  plot(x, y, col = pr, cex = 0.001, pch = 19)
+  plot(x, y, col = pr, cex = 0.1, pch = 19)
   legend('topright', legend = unique(pr), col = unique(pr), pch = 19, cex = 1)
 
   seg <- cbind.data.frame(x = x, y = y, pca = pr)
   fwrite(seg, output_file)
 }
 
-perform_umap_segmentation <- function(peak_file, output_file, n_threads = 30, eps = 0.1, minPts = 5) {
-  library(data.table)
-  library(reticulate)
-  library(umap)
-  library(dbscan)
+perform_umap_segmentation <- function(peak_file, output_file, n_threads = 50, eps = 0.2, minPts = 20) {
 
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
@@ -258,18 +256,15 @@ perform_umap_segmentation <- function(peak_file, output_file, n_threads = 30, ep
 
   viz <- umap::umap(t(mat), method = 'umap-learn', metric = 'cosine')
   dbscan_result <- dbscan(viz$layout, eps = eps, minPts = minPts)
+  
+  plot(x = x, y = y, col = dbscan_result$cluster+1,xlab='',ylab = '',main='',xaxt = "n", yaxt = "n",bty = "n",cex=0.1)
+  legend('bottomright',legend = unique(dbscan_result$cluster+1),col = unique(dbscan_result$cluster+1), pch=19,bty = "n")
 
-  plot(x = x, y = y, col = dbscan_result$cluster, pch = 13, cex = 0.1, xlab = 'UMAP_1', ylab = 'UMAP_2')
-  plot(viz$layout[, 1], viz$layout[, 2], col = dbscan_result$cluster, pch = 13, cex = 0.1)
-
-  seg <- fread(output_file)
-  seg$umap <- dbscan_result$cluster
+  seg <- cbind.data.frame(x = x, y = y, umap = dbscan_result$cluster+1)
   fwrite(seg, output_file)
 }
 
-cluster_ions <- function(peak_file, segmentation_file, output_file, hclust_cutoff = 0.6) {
-  library(data.table)
-
+cluster_ions <- function(peak_file, output_file, hclust_cutoff = 0.6, min_cluster_size = 10) {
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
 
@@ -285,11 +280,46 @@ cluster_ions <- function(peak_file, segmentation_file, output_file, hclust_cutof
   t <- hclust(D_sim)
   s <- cutree(t, h = hclust_cutoff)
 
+  name <- as.numeric(names(table(s)[table(s) > min_cluster_size]))
+  
+  Matrix <- t(dt_values)
+  split_matrices <- lapply(name, function(category) {
+    rows <- which(s == as.numeric(category))
+    subset_matrix <- Matrix[rows, , drop = FALSE]
+    return(subset_matrix)
+  })
+  
+  summed_matrices <- lapply(split_matrices, function(subset_matrix) {
+    xxx <- apply(subset_matrix, 1, scale)
+    x <- rowSums(xxx) / ncol(xxx)
+    return(x)
+  })
+  
+  result_matrix <- do.call(cbind, summed_matrices)
+  
+  clpan <- cbind.data.frame(x = x, y = y, result_matrix)
+  
+  dir.create('cluster')
+  for (i in c(1:length(name))) {
+    dfx <- result_matrix[, i]
+    norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
+    color_palette <- colorRamp(c("yellow", "red"))
+    color_sequence <- rgb(color_palette(norm) / 255, alpha = 1)
+    xlim <- max(x) - min(x) + 1
+    ylim <- max(y) - min(y) + 1
+    
+    png(paste0('cluster/cluster', name[i], '.png'), width = xlim, height = ylim)
+    plot.new()
+    par(mar = c(0, 0, 0, 0))
+    plot.window(xlim = c(0, xlim), ylim = c(0, ylim), xaxs = "i", yaxs = "i", asp = NA)
+    points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
+    dev.off()
+  }
   ioncluster <- cbind.data.frame(mz, im, class = s)
   fwrite(ioncluster, output_file)
 }
 
-cluster_roi_ions <- function(peak_file, segmentation_file, output_file, roi_cluster = 2, hclust_cutoff = 0.8, min_cluster_size = 10) {
+cluster_roi_ions <- function(peak_file, segmentation_file, output_file,roi_cluster = 2, hclust_cutoff = 0.6, min_cluster_size = 10) {
   library(data.table)
 
   dt <- fread(peak_file, header = TRUE)
@@ -349,6 +379,8 @@ cluster_roi_ions <- function(peak_file, segmentation_file, output_file, roi_clus
     points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
     dev.off()
   }
+  ioncluster <- cbind.data.frame(mz, im, class = s)
+  fwrite(ioncluster, output_file)
 }
 
 perform_reactomics_analysis <- function(peak_file, segmentation_file, islet_file, output_file) {
