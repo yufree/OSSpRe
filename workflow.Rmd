@@ -22,12 +22,14 @@ source('helper.r')
 
 ## Reference peaks
 
-Peaks from all pixels will be added together as one super pixel for reference peak picking.
+Peaks from all pixels will be added together as one super pixel for reference peak picking. 
+
+The input is the raw data and the output is the super pixel data with m/z, ccs and intensity as csv file.
 
 ```{r}
 # set the path to the .d folder
 path = 'PATH_TO_RAW.d'
-# set the dll/so file
+# set the dll/so file path
 libpath = './'
 # set the output file name
 outref = 'refpeak.csv'
@@ -61,6 +63,8 @@ This part will be used to find reference peaks across the sample.
 
 Set the parameters for peak picking and perform peak picking on super pixels. The default setting will keep all the local max peaks found in the super pixel. However, most of the peaks with smaller intensity will not be retained in the following filtering analysis and more peaks will use more computational resources for peak picking. In this case, intensity cutoff could be carefully set depending on the sensitivity of the instrument and the mean/median value of all the peaks' intensity could be the first choice.
 
+The input of the function would be the output csv file from previous step and the output will be the reference peaks list with m/z, ccs and intensity as csv file.
+
 ```{r}
 library(data.table)
 dtx <- fread('refpeak.csv')
@@ -88,7 +92,9 @@ fwrite(result,'ref2d.csv')
 
 # Quantitative Peaks List
 
-This part will extract peak intensity on all pixels according to extracted reference peaks from super pixel.
+This part will extract peak intensity on all pixels according to extracted reference peaks from super pixel. User need to select normalization methods such as `tic` or `rms` to normalize data and `tic` is the default value. User also need to set `zero_proportion` to remove the peaks with zero_proportion larger than a certain percentage (95% by default) of all pixels. A low `zero_proportion` will remove ions enriched in a smaller region of interests in the samples.
+
+The input will be the RAW data and reference peaks list from previous step. The output will be normalized data with first column as location and following columns as intensitys for each reference peaks.
 
 ```{r}
 # load the reference peaks
@@ -108,7 +114,9 @@ normpath = 'ticmzccs.csv'
 # set pixel range
 xrange <- c(3400,3900)
 yrange <- c(1050,1600)
-
+# set the uncertainty of mz and ccs
+mz_ppm <- 20
+ccs_tolerance <- 0.03
 # This function generates a quantitative peak list.
 # - refpath: Path to the reference peaks file.
 # - lib_path: Path to the Bruker library files.
@@ -119,12 +127,16 @@ yrange <- c(1050,1600)
 # - normpath: The output file for the normalized peak list.
 # - xrange: The x-range of the region of interest.
 # - yrange: The y-range of the region of interest.
-getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange)
+# - mz_ppm: The m/z tolerance in ppm.
+# - ccs_tolerance: The CCS tolerance.
+getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange, mz_ppm = mz_ppm, ccs_tolerance = ccs_tolerance)
 ```
 
 # Qualitative Peaks List
 
 Qualitative analysis is performed with public available data for MS1-CCS database.
+
+The input will be database csv files (provided as csv file), peaks list from previous step and the output of this step with be a csv file with annotation from the database.
 
 ## Lipid annotation
 
@@ -172,14 +184,14 @@ rmwf::runmzccsanno()
 
 ## Data Summary
 
-This section provides a verbose summary of the processed peak data file.
+This section provides a verbose summary of the processed peak data csv file.
 
 ```{r}
 # This function reads the peak file and prints a summary of its contents,
 # including the number of pixels, number of features, and the ranges for
 # m/z, ion mobility (CCS), and spatial coordinates.
 # - "ticmzccs.csv": The path to the input peak file.
-verbose_summary("ticmzccs.csv")
+getsummary("ticmzccs.csv")
 ```
 
 ## Peak statistics
@@ -188,7 +200,7 @@ This part will show the distribution of peak numbers.
 
 ```{r}
 # This function generates and displays plots for peak statistics.
-# - "ticmzccs.csv": The input peak file.
+# - "ticmzccs.csv": The path to the input peak file.
 plot_peak_stats("ticmzccs.csv")
 ```
 
@@ -262,29 +274,43 @@ cluster_roi_ions("ticmzccs.csv", "segmentation.csv", "roi_ion_cluster.csv", roi_
 
 This part will extract PMDs for reaction level check.
 
+The input is the peak list csv file and the output is the reaction level csv files
+
 ```{r}
 # This function performs reactomics analysis.
 # - "ticmzccs.csv": The input peak file.
-# - "segmentation.csv": The segmentation file.
-# - "isletcheckall.csv": The file containing islet information.
 # - "reactomics.csv": The output file for the reactomics analysis.
-perform_reactomics_analysis("ticmzccs.csv", "segmentation.csv", "isletcheckall.csv", "reactomics.csv")
+perform_reactomics_analysis("ticmzccs.csv", "reactomics.csv")
+```
+
+###  ROI specific reactomics analysis for ions in certain segmentation
+
+```{r}
+# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
+# - "ticmzccs.csv": The input peak file.
+# - "segmentation.csv": The segmentation file.
+# - "reactomics.csv": The output file for the reactomics analysis.
+# - roi_cluster: ROI cluster number.
+perform_roi_reactomics_analysis("ticmzccs.csv", "segmentation.csv", "roireactomics.csv", roi_cluster = 2)
 ```
 
 ## Molecular Network
 
+This part will generate network figure.
+
+The input is peak list csv file and annotation csv file, and the output is csv file for network generation.
+
 ```{r}
 # This function generates a molecular network.
-# - "ticmzccs.csv": The input peak file.
-# - "ioncluster.csv": The ion cluster file.
-# - "annoccs.csv": The annotation file.
+# - "ticmzccs.csv": The input peak csv file from quantitative peaks list.
+# - "annoccs.csv": The annotation csv file from qualitative peaks list.
 # - "molecular_network.csv": The output file for the molecular network.
-generate_molecular_network("ticmzccs.csv", "ioncluster.csv", "annoccs.csv", "molecular_network.csv")
+generate_molecular_network("ticmzccs.csv", "annoccs.csv", "molecular_network.csv")
 ```
 
 ### MSInet Shiny application
 
-Please run the following chunk to get the network csv file.
+Please run the following chunk to get the network csv file for MSInet shiny application.
 
 ```{r}
 library(pmd)
@@ -298,8 +324,8 @@ im <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) as.numeric(x[2]))
 # ions
 ioncluster <- fread('ioncluster.csv')
 library(pmd)
-data("keggrall")
-hfpmd <- as.numeric(names(table(keggrall$pmd)[table(keggrall$pmd)>mean(table(keggrall$pmd))]))
+data("sda")
+hfpmd <- round(sda$PMD,3)
 df <- rmwf::getpmddf2(dt,group = ioncluster$class,pmd=hfpmd,digits = 3)
 fwrite(df,'msinet.csv')
 ```
