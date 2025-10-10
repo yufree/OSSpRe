@@ -439,3 +439,28 @@ generate_molecular_network <- function(peak_file, ion_cluster_file, annotation_f
 
   fwrite(dfanno, output_file)
 }
+getsummary <- function(peak_file) {
+  # Read the normalized peak list
+  dt <- data.table::fread(peak_file, header = TRUE)
+  
+  # Extract mz and ccs from column names
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  ccs <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+  
+  # Extract location coordinates
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  # Calculate ranges
+  mz_range <- range(mz, na.rm = TRUE)
+  ccs_range <- range(ccs, na.rm = TRUE)
+  x_range <- range(x, na.rm = TRUE)
+  y_range <- range(y, na.rm = TRUE)
+  
+  # Print the summary
+  cat("Summary of normalized peak list:\n")
+  cat("  m/z range: ", mz_range[1], " - ", mz_range[2], "\n")
+  cat("  CCS range: ", ccs_range[1], " - ", ccs_range[2], "\n")
+  cat("  Location X range: ", x_range[1], " - ", x_range[2], "\n")
+  cat("  Location Y range: ", y_range[1], " - ", y_range[2], "\n")
+}
