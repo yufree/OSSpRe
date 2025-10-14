@@ -8,11 +8,56 @@ library(reticulate)
 library(umap)
 library(dbscan)
 library(pmd)
+library(igraph)
+library(ggraph)
+library(tidygraph)
 sourceCpp("one_over_k0_to_ccs.cpp")
 sourceCpp('peakalign.cpp')
 sourceCpp("one_over_k0_to_ccs.cpp")
 sourceCpp("peak_finder.cpp")
-
+find_2d_peaks <- function(mz, ccs, intensity, 
+                          mz_ppm = 20, 
+                          ccs_tolerance = 0.03,
+                          snr = 3.0,
+                          mz_bins = 1000,
+                          ccs_bins = 50) {
+  
+  if (!is.numeric(mz) || !is.numeric(ccs) || !is.numeric(intensity)) {
+    stop("All inputs must be numeric vectors")
+  }
+  if (length(mz) != length(ccs) || length(mz) != length(intensity)) {
+    stop("All input vectors must have the same length")
+  }
+  
+  find_2d_peaks_spatial_parallel_openmp(mz, ccs, intensity, 
+                                        mz_ppm, ccs_tolerance, snr,
+                                        mz_bins, ccs_bins)
+}
+getsummary <- function(peak_file) {
+  # Read the normalized peak list
+  dt <- data.table::fread(peak_file, header = TRUE)
+  
+  # Extract mz and ccs from column names
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  ccs <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+  
+  # Extract location coordinates
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  # Calculate ranges
+  mz_range <- range(mz, na.rm = TRUE)
+  ccs_range <- range(ccs, na.rm = TRUE)
+  x_range <- range(x, na.rm = TRUE)
+  y_range <- range(y, na.rm = TRUE)
+  
+  # Print the summary
+  cat("Summary of normalized peak list:\n")
+  cat("  m/z range: ", mz_range[1], " - ", mz_range[2], "\n")
+  cat("  CCS range: ", ccs_range[1], " - ", ccs_range[2], "\n")
+  cat("  Location X range: ", x_range[1], " - ", x_range[2], "\n")
+  cat("  Location Y range: ", y_range[1], " - ", y_range[2], "\n")
+}
 getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath, batch_size, outref, outcoord, xrange,yrange){
   # download dll/so file and set the column to be collected
   if (accept_Bruker_EULA_and_on_Windows_or_Linux) {
@@ -68,24 +113,6 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath, 
   fwrite(coord,outcoord)
 }
 # This section define the function for peak picking with rcpp support.
-find_2d_peaks <- function(mz, ccs, intensity, 
-                          mz_ppm = 20, 
-                          ccs_tolerance = 0.03,
-                          snr = 3.0,
-                          mz_bins = 1000,
-                          ccs_bins = 50) {
-  
-  if (!is.numeric(mz) || !is.numeric(ccs) || !is.numeric(intensity)) {
-    stop("All inputs must be numeric vectors")
-  }
-  if (length(mz) != length(ccs) || length(mz) != length(intensity)) {
-    stop("All input vectors must have the same length")
-  }
-  
-  find_2d_peaks_spatial_parallel_openmp(mz, ccs, intensity, 
-                                        mz_ppm, ccs_tolerance, snr,
-                                        mz_bins, ccs_bins)
-}
 # function to generate quantative peaks list
 getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coordpath, normpath, xrange, yrange){
   ref <- fread(refpath)
@@ -145,7 +172,7 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   result_filtered[, frame := NULL]
   fwrite(result_filtered,normpath)
 }
-getanno <- function(database,mode,peakpath,annofile){
+getanno <- function(database,mode,peakpath,annofile, ppm = 10, deltaccs = 5){
   lipid <- fread(database)
   # set mode
   if(mode == 'pos'){
@@ -159,7 +186,7 @@ getanno <- function(database,mode,peakpath,annofile){
   mz <- sapply(strsplit(colnames(ref)[-1],'\\_'),function(x) round(as.numeric(x[1]),4))
   im <- sapply(strsplit(colnames(ref)[-1],'\\_'),function(x) as.numeric(x[2]))
   # align
-  align <- enviGCMS::getalign(mz,lipid$mz,im,lipid$ccs,ppm=20,deltart = 5)
+  align <- enviGCMS::getalign(mz,lipid$mz,im,lipid$ccs,ppm=ppm,deltart = deltaccs)
   anno <- cbind.data.frame(mz=mz[align$xid],im=im[align$xid],db_mz=align$mz2,db_im=align$rt2)
   lipidanno <- merge(anno,lipid,by.x = c('db_mz','db_im'),by.y = c('mz','ccs'))
   lipidanno <- lipidanno[!duplicated(lipidanno),]
@@ -170,44 +197,228 @@ getanno <- function(database,mode,peakpath,annofile){
 plot_peak_stats <- function(peak_file) {
   library(data.table)
   library(ggplot2)
-
+  
   dt <- fread(peak_file, header = TRUE)
   dt[, np := rowSums(.SD != 0)]
   
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
-
+  
   df <- cbind.data.frame(x = x, y = y, np = dt$np)
-
+  
   p1 <- ggplot(df, aes(np)) +
     ggtitle('Peak number for each pixel') + xlab('Peak number') +
     geom_histogram(binwidth = 1) + theme_bw()
-
+  
   p2 <- ggplot(df, aes(x, y)) +
     geom_point(aes(color = np), size = 0.001) +
     scale_color_gradient(low = "white", high = "red") + theme_void()
-
+  
   print(p1)
   print(p2)
 }
 
-save_ion_images <- function(peak_file, mz_values) {
-  library(data.table)
-
+perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, n_clusters = 5) {
+  
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
-
+  
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  mat <- t(dt_values)
+  mat_centered <- scale(t(mat), center = TRUE, scale = FALSE)
+  svd_result <- irlba(t(mat_centered), nv = n_components)
+  pca_scores <- t(mat_centered) %*% svd_result$v
+  
+  km <- KMeans_arma(as.matrix(pca_scores), clusters = n_clusters, n_iter = 10, seed_mode = "random_subset", verbose = TRUE, CENTROIDS = NULL)
+  pr <- predict_KMeans(as.matrix(pca_scores), km)
+  
+  plot(x, y, col = pr, cex = 0.1, pch = 19)
+  legend('topright', legend = unique(pr), col = unique(pr), pch = 19, cex = 1)
+  
+  seg <- cbind.data.frame(x = x, y = y, seg = pr)
+  fwrite(seg, output_file)
+}
 
+perform_umap_segmentation <- function(peak_file, output_file, n_threads = 50, eps = 0.2, minPts = 20) {
+  
+  dt <- fread(peak_file, header = TRUE)
+  dt_values <- dt[, -1, with = FALSE]
+  
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  mat <- t(dt_values)
+  Sys.setenv(NUMBA_NUM_THREADS = n_threads)
+  py_run_string(paste0("import os; print(os.environ['NUMBA_NUM_THREADS'])"))
+  
+  viz <- umap::umap(t(mat), method = 'umap-learn', metric = 'cosine')
+  dbscan_result <- dbscan(viz$layout, eps = eps, minPts = minPts)
+  
+  plot(x = x, y = y, col = dbscan_result$cluster+1,xlab='',ylab = '',main='',xaxt = "n", yaxt = "n",bty = "n",cex=0.1)
+  legend('bottomright',legend = unique(dbscan_result$cluster+1),col = unique(dbscan_result$cluster+1), pch=19,bty = "n")
+  
+  seg <- cbind.data.frame(x = x, y = y, seg = dbscan_result$cluster+1)
+  fwrite(seg, output_file)
+}
+
+perform_cluster_ions <- function(peak_file, output_file, locindex=NULL, hclust_cutoff = 0.6, min_cluster_size = 10, folder_name='cluster') {
+  dt <- fread(peak_file, header = TRUE)
+  dt_values <- dt[, -1, with = FALSE]
+  
   mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
   im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+  
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  if(!is.null(locindex)){
+    subdt <- dt_values[locindex]
+    x <- x[locindex]
+    y <- y[locindex]
+  }else{
+    subdt <- dt_values
+  }
+  
+  Matrix <- t(subdt)
+  row_norms <- sqrt(rowSums(Matrix^2))
+  sim <- sweep(Matrix, 1, row_norms, "/")
+  sim <- sim %*% t(sim)
+  D_sim <- as.dist(1 - sim)
+  
+  t <- hclust(D_sim)
+  s <- cutree(t, h = hclust_cutoff)
+  
+  name <- as.numeric(names(table(s)[table(s) > min_cluster_size]))
+  
+  Matrix <- t(subdt)
+  split_matrices <- lapply(name, function(category) {
+    rows <- which(s == as.numeric(category))
+    subset_matrix <- Matrix[rows, , drop = FALSE]
+    return(subset_matrix)
+  })
+  
+  summed_matrices <- lapply(split_matrices, function(subset_matrix) {
+    xxx <- apply(subset_matrix, 1, scale)
+    x <- rowSums(xxx) / ncol(xxx)
+    return(x)
+  })
+  
+  result_matrix <- do.call(cbind, summed_matrices)
+  
+  clpan <- cbind.data.frame(x = x, y = y, result_matrix)
+  
+  dir.create(folder_name)
+  for (i in c(1:length(name))) {
+    dfx <- result_matrix[, i]
+    norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
+    color_palette <- colorRamp(c("skyblue", "red"))
+    color_sequence <- rgb(color_palette(norm) / 255, alpha = 1)
+    xlim <- max(x) - min(x) + 1
+    ylim <- max(y) - min(y) + 1
+    
+    png(paste0(folder_name,'/cluster', name[i], '.png'), width = xlim, height = ylim)
+    plot.new()
+    par(mar = c(0, 0, 0, 0))
+    plot.window(xlim = c(0, xlim), ylim = c(0, ylim), xaxs = "i", yaxs = "i", asp = NA)
+    points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
+    dev.off()
+  }
+  ioncluster <- cbind.data.frame(mz, im, class = s)
+  fwrite(ioncluster, output_file)
+}
 
+perform_reactomics_analysis <- function(peak_file, output_file, pmd = c(14.016,15.995,2.016,18.011), locindex = NULL) {
+  
+  dt <- fread(peak_file, header = TRUE)
+  dt_values <- dt[, -1, with = FALSE]
+  
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+  
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  xy <- cbind.data.frame(x,y)
+  
+  if(!is.null(locindex)){
+    subdt <- dt_values[locindex]
+    xy <- xy[locindex,]
+  }else{
+    subdt <- dt_values
+  }
+  
+  df <- getpmddf(mz, pmd = pmd, digits = 3)
+  
+  df$diff3 <- round(df$diff, 3)
+  
+  # Normalize the intensity data for the ROI (row-wise) and transpose it
+  dfall <- t(apply(subdt, 1, function(x) {
+    max_val <- max(x, na.rm = TRUE)
+    if (!is.finite(max_val) || max_val == 0) {
+      return(rep(0, length(x)))
+    }
+    return(x / max_val)
+  }))
+  dfall[is.na(dfall)] <- 0
+  
+  for (pmd_val in pmd) {
+    
+    # Filter the PMD data frame for the current, exact pmd_val
+    dff_group <- df[df$diff3 == pmd_val, ]
+    
+    # Initialize sums as zero vectors
+    pmd_h <- numeric(nrow(xy))
+    pmd_l <- numeric(nrow(xy))
+    
+    # Proceed only if PMD pairs were found for this value
+    if (nrow(dff_group) > 0) {
+      
+      # Sum intensities for higher m/z values ('ms1')
+      dfms1 <- dfall[, mz %in% unique(dff_group$ms1), drop = FALSE]
+      if (ncol(dfms1) > 0) {
+        pmd_h <- rowSums(dfms1)
+      }
+      
+      # Sum intensities for lower m/z values ('ms2')
+      dfms2 <- dfall[, mz %in% unique(dff_group$ms2), drop = FALSE]
+      if (ncol(dfms2) > 0) {
+        pmd_l <- rowSums(dfms2)
+      }
+    }
+    
+    # --- Store results in the output data frame ---
+    # Create a clean suffix for column names by replacing '.' with '_'
+    col_suffix <- gsub(".", "_", as.character(pmd_val), fixed = TRUE)
+    
+    # Create dynamic column names
+    h_col_name <- paste0("pmd", col_suffix, "h")
+    l_col_name <- paste0("pmd", col_suffix, "l")
+    total_col_name <- paste0("pmd", col_suffix)
+    
+    # Assign the calculated sums to the new columns
+    xy[[h_col_name]] <- pmd_h
+    xy[[l_col_name]] <- pmd_l
+    xy[[total_col_name]] <- pmd_h + pmd_l
+  }
+  fwrite(xy, output_file)
+}
+
+save_ion_images <- function(peak_file, mz_values) {
+  dt <- fread(peak_file, header = TRUE)
+  dt_values <- dt[, -1, with = FALSE]
+  
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+  
   dt_filtered <- as.data.frame(dt_values[, .SD, .SDcols = mz %in% mz_values])
-
+  
   width <- max(x) - min(x) + 1
   height <- max(y) - min(y) + 1
-
+  
   for (i in 1:ncol(dt_filtered)) {
     dfx <- dt_filtered[, i]
     norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
@@ -220,283 +431,70 @@ save_ion_images <- function(peak_file, mz_values) {
   }
 }
 
-perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, n_clusters = 5) {
-
-  dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-
-  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
-  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
-
-  mat <- t(dt_values)
-  mat_centered <- scale(t(mat), center = TRUE, scale = FALSE)
-  svd_result <- irlba(t(mat_centered), nv = n_components)
-  pca_scores <- t(mat_centered) %*% svd_result$v
-
-  km <- KMeans_arma(as.matrix(pca_scores), clusters = n_clusters, n_iter = 10, seed_mode = "random_subset", verbose = TRUE, CENTROIDS = NULL)
-  pr <- predict_KMeans(as.matrix(pca_scores), km)
-
-  plot(x, y, col = pr, cex = 0.1, pch = 19)
-  legend('topright', legend = unique(pr), col = unique(pr), pch = 19, cex = 1)
-
-  seg <- cbind.data.frame(x = x, y = y, seg = pr)
-  fwrite(seg, output_file)
-}
-
-perform_umap_segmentation <- function(peak_file, output_file, n_threads = 50, eps = 0.2, minPts = 20) {
-
-  dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-
-  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
-  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
-
-  mat <- t(dt_values)
-  Sys.setenv(NUMBA_NUM_THREADS = n_threads)
-  py_run_string(paste0("import os; print(os.environ['NUMBA_NUM_THREADS'])"))
-
-  viz <- umap::umap(t(mat), method = 'umap-learn', metric = 'cosine')
-  dbscan_result <- dbscan(viz$layout, eps = eps, minPts = minPts)
+save_pmd_images <- function(peak_file, pmd_values,filename){
+  col_suffix <- gsub(".", "_", as.character(pmd_values), fixed = TRUE)
+  lowname <- paste0('pmd',col_suffix,'l')
+  highname <- paste0('pmd',col_suffix,'h')
+  xy <- fread(peak_file)
+  width = diff(range(xy$x))
+  height = diff(range(xy$y))
+  png(filename,width*2, height*2,bg = 'transparent',res = 300)
+  layout(matrix(c(1, 2), nrow = 1, ncol = 2), widths = c(0.8, 0.2))
+  plot.new()
+  par(mar=c(0,0,0,0))
+  plot.window(xlim = c(0,width), ylim = c(0,height), xaxs = "i", yaxs = "i", asp = NA)
+  dfx <- xy[,..lowname][[1]]
+  norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx)) *0.5
+  # point_colors <- colors_with_alpha[col_index]
+  points(xy$x-min(xy$x)+1, xy$y-min(xy$y)+1, pch = 16, col = rgb(1, 0, 0, norm),cex=0.3)
+  dfx <- xy[,..highname][[1]]
+  norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx)) *0.25
+  points(xy$x-min(xy$x)+1, xy$y-min(xy$y)+1, pch = 16, col = rgb(0, 0, 1, norm),cex=0.3)
+  par(mar = c(1, 0, 4, 1)) 
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1), xaxs="i", yaxs="i")
   
-  plot(x = x, y = y, col = dbscan_result$cluster+1,xlab='',ylab = '',main='',xaxt = "n", yaxt = "n",bty = "n",cex=0.1)
-  legend('bottomright',legend = unique(dbscan_result$cluster+1),col = unique(dbscan_result$cluster+1), pch=19,bty = "n")
-
-  seg <- cbind.data.frame(x = x, y = y, seg = dbscan_result$cluster+1)
-  fwrite(seg, output_file)
-}
-
-cluster_ions <- function(peak_file, output_file, hclust_cutoff = 0.6, min_cluster_size = 10) {
-  dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
-
-  Matrix <- t(dt_values)
-  row_norms <- sqrt(rowSums(Matrix^2))
-  sim <- sweep(Matrix, 1, row_norms, "/")
-  sim <- sim %*% t(sim)
-  D_sim <- as.dist(1 - sim)
-
-  t <- hclust(D_sim)
-  s <- cutree(t, h = hclust_cutoff)
-
-  name <- as.numeric(names(table(s)[table(s) > min_cluster_size]))
+  n_colors <- 100
+  red_colors <- rgb(1, 0, 0, alpha = seq(1, 0, length.out = n_colors) * 0.5)
+  blue_colors <- rgb(0, 0, 1, alpha = seq(1, 0, length.out = n_colors) * 0.25)
   
-  Matrix <- t(dt_values)
-  split_matrices <- lapply(name, function(category) {
-    rows <- which(s == as.numeric(category))
-    subset_matrix <- Matrix[rows, , drop = FALSE]
-    return(subset_matrix)
-  })
+  rasterImage(as.raster(matrix(blue_colors, ncol=1)), 
+              xleft = 0.2, ybottom = 0.1, xright = 0.5, ytop = 0.45)
+  text(x = 0.55, y = 0.45, labels = "High", pos = 4, cex = 0.2)
+  text(x = 0.55, y = 0.1, labels = "Low", pos = 4, cex = 0.2)
+  text(x = 0.5, y = 0.5, labels = paste('PMD',pmd_values,'High'), cex = 0.2, adj = 0.5)
   
-  summed_matrices <- lapply(split_matrices, function(subset_matrix) {
-    xxx <- apply(subset_matrix, 1, scale)
-    x <- rowSums(xxx) / ncol(xxx)
-    return(x)
-  })
-  
-  result_matrix <- do.call(cbind, summed_matrices)
-  
-  clpan <- cbind.data.frame(x = x, y = y, result_matrix)
-  
-  dir.create('cluster')
-  for (i in c(1:length(name))) {
-    dfx <- result_matrix[, i]
-    norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
-    color_palette <- colorRamp(c("yellow", "red"))
-    color_sequence <- rgb(color_palette(norm) / 255, alpha = 1)
-    xlim <- max(x) - min(x) + 1
-    ylim <- max(y) - min(y) + 1
-    
-    png(paste0('cluster/cluster', name[i], '.png'), width = xlim, height = ylim)
-    plot.new()
-    par(mar = c(0, 0, 0, 0))
-    plot.window(xlim = c(0, xlim), ylim = c(0, ylim), xaxs = "i", yaxs = "i", asp = NA)
-    points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
-    dev.off()
-  }
-  ioncluster <- cbind.data.frame(mz, im, class = s)
-  fwrite(ioncluster, output_file)
-}
-
-cluster_roi_ions <- function(peak_file, segmentation_file, output_file,roi_cluster = 2, hclust_cutoff = 0.6, min_cluster_size = 10) {
-  
-  dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
-
-  seg <- fread(segmentation_file, header = TRUE)
-
-  subdt <- dt_values[seg$umap == roi_cluster, ]
-  x <- seg$x
-  y <- seg$y
-
-  Matrix <- t(subdt)
-
-  n <- ncol(Matrix)
-  Matrix_scaled <- scale(Matrix)
-  sim <- (Matrix_scaled %*% t(Matrix_scaled)) / (n - 1)
-  D_sim <- as.dist(1 - sim)
-
-  t <- hclust(D_sim)
-  s <- cutree(t, h = hclust_cutoff)
-
-  name <- as.numeric(names(table(s)[table(s) > min_cluster_size]))
-
-  Matrix <- t(dt_values)
-  split_matrices <- lapply(name, function(category) {
-    rows <- which(s == as.numeric(category))
-    subset_matrix <- Matrix[rows, , drop = FALSE]
-    return(subset_matrix)
-  })
-
-  summed_matrices <- lapply(split_matrices, function(subset_matrix) {
-    xxx <- apply(subset_matrix, 1, scale)
-    x <- rowSums(xxx) / ncol(xxx)
-    return(x)
-  })
-
-  result_matrix <- do.call(cbind, summed_matrices)
-
-  clpan <- cbind.data.frame(x = x, y = y, result_matrix)
-
-  dir.create('cluster')
-  for (i in c(1:length(name))) {
-    dfx <- result_matrix[, i]
-    norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
-    color_palette <- colorRamp(c("yellow", "red"))
-    color_sequence <- rgb(color_palette(norm) / 255, alpha = 1)
-    xlim <- max(x) - min(x) + 1
-    ylim <- max(y) - min(y) + 1
-
-    png(paste0('cluster/cluster', name[i], '.png'), width = xlim, height = ylim)
-    plot.new()
-    par(mar = c(0, 0, 0, 0))
-    plot.window(xlim = c(0, xlim), ylim = c(0, ylim), xaxs = "i", yaxs = "i", asp = NA)
-    points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
-    dev.off()
-  }
-  ioncluster <- cbind.data.frame(mz, im, class = s)
-  fwrite(ioncluster, output_file)
-}
-
-perform_reactomics_analysis <- function(peak_file, segmentation_file = NULL, pmd, roi_cluster = 2, islet_file, output_file) {
-  
-  dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
-
-  if(!is.null(segmentation_file)){
-    seg <- fread(segmentation_file, header = TRUE)
-    xy <- data.frame(location = dt$location)
-    xy$factor <- seg$seg
-  }
-  
-  isletdf <- fread(islet_file, header = TRUE)
-
-  df <- getpmddf(mz, pmd = pmd, digits = 3, group = ifelse(colnames(dt)[-1] %in% isletdf$`islet`, 1, 0))
-  
-  
-
-  df$diff3 <- round(df$diff, 3)
-  df3 <- df[df$diff3 == 14.015 | df$diff3 == 14.016, ]
-  df4 <- df[df$diff3 == 15.995 | df$diff3 == 15.996, ]
-  df5 <- df[df$diff3 == 2.015 | df$diff3 == 2.016, ]
-  df6 <- df[df$diff3 == 18.010 | df$diff3 == 18.011, ]
-
-  dfall <- apply(dt_values, 1, function(x) x / max(x))
-  dfall[is.na(dfall)] <- 0
-  dfall <- t(dfall)
-
-  dfms1 <- dfall[, mz %in% df3$ms1]
-  dfms2 <- dfall[, mz %in% df3$ms2]
-  xy$pmd14h <- apply(dfms1, 1, sum)
-  xy$pmd14l <- apply(dfms2, 1, sum)
-
-  dfms1 <- dfall[, mz %in% df4$ms1]
-  dfms2 <- dfall[, mz %in% df4$ms2]
-  xy$pmd16h <- apply(dfms1, 1, sum)
-  xy$pmd16l <- apply(dfms2, 1, sum)
-
-  dfms1 <- dfall[, mz %in% df5$ms1]
-  dfms2 <- dfall[, mz %in% df5$ms2]
-  xy$pmd2h <- apply(dfms1, 1, sum)
-  xy$pmd2l <- apply(dfms2, 1, sum)
-
-  dfms1 <- dfall[, mz %in% df6$ms1]
-  dfms2 <- dfall[, mz %in% df6$ms2]
-  xy$pmd18h <- apply(dfms1, 1, sum)
-  xy$pmd18l <- apply(dfms2, 1, sum)
-
-  xy$pmd2 <- xy$pmd2h + xy$pmd2l
-  xy$pmd14 <- xy$pmd14h + xy$pmd14l
-  xy$pmd16 <- xy$pmd16h + xy$pmd16l
-  xy$pmd18 <- xy$pmd18h + xy$pmd18l
-
-  fwrite(xy, output_file)
+  rasterImage(as.raster(matrix(red_colors, ncol=1)), 
+              xleft = 0.2, ybottom = 0.55, xright = 0.5, ytop = 0.9)
+  text(x = 0.55, y = 0.9, labels = "High", pos = 4, cex = 0.2)
+  text(x = 0.55, y = 0.55, labels = "Low", pos = 4, cex = 0.2)
+  text(x = 0.5, y = 0.95, labels = paste('PMD',pmd_values,'low'), cex = 0.2, adj = 0.5)
+  dev.off()
 }
 
 generate_molecular_network <- function(peak_file, ion_cluster_file, annotation_file, output_file) {
-  library(pmd)
-  library(data.table)
-  library(igraph)
-  library(ggraph)
-  library(tidygraph)
-
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
-
+  
   mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
   im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
-
+  
   ioncluster <- fread(ion_cluster_file)
   anno <- fread(annotation_file)
-
-  data("keggrall")
-  hfpmd <- as.numeric(names(table(keggrall$pmd)[table(keggrall$pmd) > mean(table(keggrall$pmd))]))
+  
+  data("sda")
+  hfpmd <- round(sda$PMD,3)
   df <- getpmddf(mz, group = ioncluster$class, pmd = hfpmd, digits = 3)
-
+  
   df$anno1 <- anno$name[match(df$ms1, anno$mz)]
   df$anno2 <- anno$name[match(df$ms2, anno$mz)]
-
+  
   dfanno <- df[complete.cases(df), ]
-
+  
   net <- graph_from_data_frame(dfanno)
   graph <- as_tbl_graph(net)
   p <- ggraph(graph, layout = 'fr') +
     geom_edge_link(aes(color = net)) + theme_void()
-
   print(p)
-
   fwrite(dfanno, output_file)
-}
-getsummary <- function(peak_file) {
-  # Read the normalized peak list
-  dt <- data.table::fread(peak_file, header = TRUE)
-  
-  # Extract mz and ccs from column names
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  ccs <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
-  
-  # Extract location coordinates
-  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
-  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
-  
-  # Calculate ranges
-  mz_range <- range(mz, na.rm = TRUE)
-  ccs_range <- range(ccs, na.rm = TRUE)
-  x_range <- range(x, na.rm = TRUE)
-  y_range <- range(y, na.rm = TRUE)
-  
-  # Print the summary
-  cat("Summary of normalized peak list:\n")
-  cat("  m/z range: ", mz_range[1], " - ", mz_range[2], "\n")
-  cat("  CCS range: ", ccs_range[1], " - ", ccs_range[2], "\n")
-  cat("  Location X range: ", x_range[1], " - ", x_range[2], "\n")
-  cat("  Location Y range: ", y_range[1], " - ", y_range[2], "\n")
 }
