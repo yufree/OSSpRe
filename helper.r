@@ -7,6 +7,7 @@ library(ClusterR)
 library(reticulate)
 library(umap)
 library(dbscan)
+library(pmd)
 sourceCpp("one_over_k0_to_ccs.cpp")
 sourceCpp('peakalign.cpp')
 sourceCpp("one_over_k0_to_ccs.cpp")
@@ -238,7 +239,7 @@ perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, 
   plot(x, y, col = pr, cex = 0.1, pch = 19)
   legend('topright', legend = unique(pr), col = unique(pr), pch = 19, cex = 1)
 
-  seg <- cbind.data.frame(x = x, y = y, pca = pr)
+  seg <- cbind.data.frame(x = x, y = y, seg = pr)
   fwrite(seg, output_file)
 }
 
@@ -260,7 +261,7 @@ perform_umap_segmentation <- function(peak_file, output_file, n_threads = 50, ep
   plot(x = x, y = y, col = dbscan_result$cluster+1,xlab='',ylab = '',main='',xaxt = "n", yaxt = "n",bty = "n",cex=0.1)
   legend('bottomright',legend = unique(dbscan_result$cluster+1),col = unique(dbscan_result$cluster+1), pch=19,bty = "n")
 
-  seg <- cbind.data.frame(x = x, y = y, umap = dbscan_result$cluster+1)
+  seg <- cbind.data.frame(x = x, y = y, seg = dbscan_result$cluster+1)
   fwrite(seg, output_file)
 }
 
@@ -320,8 +321,7 @@ cluster_ions <- function(peak_file, output_file, hclust_cutoff = 0.6, min_cluste
 }
 
 cluster_roi_ions <- function(peak_file, segmentation_file, output_file,roi_cluster = 2, hclust_cutoff = 0.6, min_cluster_size = 10) {
-  library(data.table)
-
+  
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
 
@@ -383,22 +383,25 @@ cluster_roi_ions <- function(peak_file, segmentation_file, output_file,roi_clust
   fwrite(ioncluster, output_file)
 }
 
-perform_reactomics_analysis <- function(peak_file, segmentation_file, islet_file, output_file) {
-  library(pmd)
-  library(data.table)
-
+perform_reactomics_analysis <- function(peak_file, segmentation_file = NULL, pmd, roi_cluster = 2, islet_file, output_file) {
+  
   dt <- fread(peak_file, header = TRUE)
   dt_values <- dt[, -1, with = FALSE]
 
   mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
   im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
 
-  seg <- fread(segmentation_file, header = TRUE)
+  if(!is.null(segmentation_file)){
+    seg <- fread(segmentation_file, header = TRUE)
+    xy <- data.frame(location = dt$location)
+    xy$factor <- seg$seg
+  }
+  
   isletdf <- fread(islet_file, header = TRUE)
 
-  df <- getpmddf(mz, pmd = c(14.015, 14.016, 15.995, 15.996, 2.015, 2.016, 18.010, 18.011), digits = 3, group = ifelse(colnames(dt)[-1] %in% isletdf$`islet`, 1, 0))
-  xy <- data.frame(x = seg$x, y = seg$y)
-  xy$factor <- seg$umap
+  df <- getpmddf(mz, pmd = pmd, digits = 3, group = ifelse(colnames(dt)[-1] %in% isletdf$`islet`, 1, 0))
+  
+  
 
   df$diff3 <- round(df$diff, 3)
   df3 <- df[df$diff3 == 14.015 | df$diff3 == 14.016, ]
