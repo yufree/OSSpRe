@@ -152,6 +152,8 @@ annofile = 'annoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations.
+# - ppm: annotation mass accuracy for m/z, default 10
+# - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
@@ -169,6 +171,8 @@ annofile = 'metaannoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations.
+# - ppm: annotation mass accuracy for m/z, default 10
+# - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
@@ -246,7 +250,7 @@ perform_umap_segmentation("ticmzccs.csv", "segmentation.csv")
 
 ## Ion cluster
 
-This part will use cosine/correlation similarity to find ion clusters with similar spatial distribution.
+This part will use cosine/correlation similarity to find ion clusters with similar spatial distribution. The output csv file contain cluster number, which can be used to confirm ions cluster via images.
 
 ```{r}
 # This function clusters ions based on their spatial distribution.
@@ -254,20 +258,24 @@ This part will use cosine/correlation similarity to find ion clusters with simil
 # - "ioncluster.csv": The output file for the ion clusters.
 # - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
 # - min_cluster_size: screen the cluster with a minimum number of ions
-cluster_ions("ticmzccs.csv", "ioncluster.csv", hclust_cutoff = 0.6, min_cluster_size = 10)
+perform_cluster_ions(peak_file = "ticmzccs.csv", output_file = "ioncluster.csv", hclust_cutoff = 0.6, min_cluster_size = 10, folder_name = 'fullsample')
 ```
 
 ###  ROI specific Ion cluster for ions in certain segmentation
 
+You can also perform ions cluster ions within a specific region of interest (ROI) from previous segmentation output csv file. 
+
 ```{r}
-# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
+# This function will generate images for each clusters to help the user find the optimized cutoff.
 # - "ticmzccs.csv": The input peak file.
-# - "segmentation.csv": The segmentation file.
 # - "roi_ion_cluster.csv": The output file for the ROI ion clusters.
 # - roi_cluster: ROI cluster number.
 # - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
 # - min_cluster_size: minium number of ions in the cluster
-cluster_roi_ions("ticmzccs.csv", "segmentation.csv", "roi_ion_cluster.csv", roi_cluster = 2, hclust_cutoff = 0.8, min_cluster_size = 10)
+# loading segmentation result and select roi segmentation class number
+seg <- fread("segmentation.csv")
+locindex <- seg$seg == 4
+perform_cluster_ions(peak_file = "ticmzccs.csv", output_file = "roi_ion_cluster.csv", locindex = locindex, hclust_cutoff = 0.8, min_cluster_size = 10, folder_name = 'roi')
 ```
 
 ## Reactomics analysis
@@ -288,10 +296,21 @@ perform_reactomics_analysis("ticmzccs.csv", "reactomics.csv")
 ```{r}
 # This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
 # - "ticmzccs.csv": The input peak file.
-# - "segmentation.csv": The segmentation file.
-# - "reactomics.csv": The output file for the reactomics analysis.
-# - roi_cluster: ROI cluster number.
-perform_roi_reactomics_analysis("ticmzccs.csv", "segmentation.csv", "roireactomics.csv", roi_cluster = 2)
+# - "roireactomics.csv": The output file for the reactomics analysis.
+# loading segmentation result and select roi segmentation class number
+seg <- fread("segmentation.csv")
+locindex <- seg$seg == 4
+perform_roi_reactomics_analysis("ticmzccs.csv", "roireactomics.csv", locindex = locindex)
+```
+
+###  Visualization of certain reaction (PMD)
+
+```{r}
+# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
+# - "reactomics.csv": The output csv file from the reactomics analysis.
+# - pmd_values: pmd value to be visualized
+# - "pmd2.016.png": the figure name
+save_pmd_images("reactomics.csv",pmd_values = 2.016,"pmd2.016.png")
 ```
 
 ## Molecular Network
@@ -316,12 +335,7 @@ Please run the following chunk to get the network csv file for MSInet shiny appl
 library(pmd)
 library(data.table)
 dt <- fread("ticmzccs.csv",header = T)
-
-# m/z and im
-mz <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) round(as.numeric(x[1]),4))
-im <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) as.numeric(x[2]))
-
-# ions
+# load ion cluster csv file
 ioncluster <- fread('ioncluster.csv')
 library(pmd)
 data("sda")
@@ -333,13 +347,16 @@ fwrite(df,'msinet.csv')
 Please run the following chunk to get figures for ions.
 
 ```{r}
+# m/z and im
 dir.create('fig')
 ions <- unique(c(df$from,df$to))
-mz <- sapply(strsplit(colnames(dt_values),'_'),function(x) round(as.numeric(x[1]),4))
-im <- sapply(strsplit(colnames(dt_values),'_'),function(x) as.numeric(x[2]))
+mz <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) round(as.numeric(x[1]),4))
+im <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) as.numeric(x[2]))
+ions <- unique(c(df$from,df$to))
 name <- paste0(mz,'_',round(im))
 dt_values <- as.data.frame(dt_values)
-sub <- dt_values[,match(ions,name)]
+idx <- match(ions,name)+1
+sub <- dt[,..idx]
 colnames(sub) <- ions
 x <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[1]))
 y <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[2]))
