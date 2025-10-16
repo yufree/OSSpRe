@@ -48,8 +48,8 @@ yrange <- c(1050,1600)
 # - accept_Bruker_EULA_and_on_Windows_or_Linux: Set to TRUE to accept the Bruker EULA.
 # - libpath: Path to the Bruker library files.
 # - batch_size: The number of frames to process in each batch.
-# - outref: The output file for the reference peaks.
-# - outcoord: The output file for the coordinates.
+# - outref: The output file for the reference peaks. The columns are m/z, ccs and intensity for found peaks.
+# - outcoord: The output file for the coordinates. The location of pixels with frame number, x and y location.
 # - xrange: The x-range of the region of interest.
 # - yrange: The y-range of the region of interest.
 getrefpeak(path = path,accept_Bruker_EULA_and_on_Windows_or_Linux = accept_Bruker_EULA_and_on_Windows_or_Linux, batch_size = batch_size, outref = outref, outcoord = outcoord, xrange = xrange,yrange = yrange)
@@ -85,6 +85,7 @@ ccs_bins <- 50
 # - ccs_bins: The number of CCS bins.
 result <- find_2d_peaks(dtx$mz,dtx$ccs,dtx$intensity,mz_ppm,ccs_tolerance,snr,mz_bins,ccs_bins)
 fwrite(result,'ref2d.csv')
+# The columns are m/z, ccs and intensity for found peaks.
 # retain peaks larger than mean value of all reference peaks
 # sub <- result[result$intensity>mean(result$intensity),]
 # fwrite(sub,'ref2d.csv')
@@ -118,13 +119,13 @@ yrange <- c(1050,1600)
 mz_ppm <- 20
 ccs_tolerance <- 0.03
 # This function generates a quantitative peak list.
-# - refpath: Path to the reference peaks file.
+# - refpath: Path to the reference peaks file.  The columns are m/z, ccs and intensity for found peaks.
 # - lib_path: Path to the Bruker library files.
 # - path: Path to the raw data.
 # - method: The normalization method ('tic' or 'rms').
 # - zero_proportion_cutoff: The cutoff for removing peaks with a high proportion of zeros.
 # - coordpath: Path to the coordinates file.
-# - normpath: The output file for the normalized peak list.
+# - normpath: The output file for the normalized peak list. The first column is the location of the pixel in X_Y format and following columns are the ions' normalized intensity found in this pixel. 
 # - xrange: The x-range of the region of interest.
 # - yrange: The y-range of the region of interest.
 # - mz_ppm: The m/z tolerance in ppm.
@@ -151,7 +152,7 @@ annofile = 'annoccs.csv'
 # - database: Path to the lipid database.
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
-# - annofile: The output file for the annotations.
+# - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
 # - ppm: annotation mass accuracy for m/z, default 10
 # - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
@@ -170,7 +171,7 @@ annofile = 'metaannoccs.csv'
 # - database: Path to the metabolite database.
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
-# - annofile: The output file for the annotations.
+# - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
 # - ppm: annotation mass accuracy for m/z, default 10
 # - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
@@ -233,7 +234,7 @@ This part will use PCA to perform segmentation.
 ```{r}
 # This function performs PCA segmentation on the peak data.
 # - "ticmzccs.csv": The input peak file.
-# - "segmentation.csv": The output file for the segmentation results.
+# - "segmentation.csv": The output file for the segmentation results. 
 perform_pca_segmentation("ticmzccs.csv", "segmentation.csv")
 ```
 
@@ -255,7 +256,7 @@ This part will use cosine/correlation similarity to find ion clusters with simil
 ```{r}
 # This function clusters ions based on their spatial distribution.
 # - "ticmzccs.csv": The input peak file.
-# - "ioncluster.csv": The output file for the ion clusters.
+# - "ioncluster.csv": The output file for the ion clusters. Results contain m/z and ccs in the first two columns from reference peaks and class number based on cosine similarity with user defined cutoff.
 # - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
 # - min_cluster_size: screen the cluster with a minimum number of ions
 perform_cluster_ions(peak_file = "ticmzccs.csv", output_file = "ioncluster.csv", hclust_cutoff = 0.6, min_cluster_size = 10, folder_name = 'fullsample')
@@ -268,7 +269,7 @@ You can also perform ions cluster ions within a specific region of interest (ROI
 ```{r}
 # This function will generate images for each clusters to help the user find the optimized cutoff.
 # - "ticmzccs.csv": The input peak file.
-# - "roi_ion_cluster.csv": The output file for the ROI ion clusters.
+# - "roi_ion_cluster.csv": The output file for the ROI ion clusters. Results contain m/z and ccs in the first two columns from reference peaks and class number based on cosine similarity with user defined cutoff.
 # - roi_cluster: ROI cluster number.
 # - hclust_cutoff: the cutoff of hierarchical clustering dendrogram
 # - min_cluster_size: minium number of ions in the cluster
@@ -287,7 +288,7 @@ The input is the peak list csv file and the output is the reaction level csv fil
 ```{r}
 # This function performs reactomics analysis.
 # - "ticmzccs.csv": The input peak file.
-# - "reactomics.csv": The output file for the reactomics analysis.
+# - "reactomics.csv": The output file for the reactomics analysis. The first two columns are the locations of pixels and following columns are quantitative results of PMDs. Each PMD contains three columns: one from lower mass, one from higher mass and one for the sum of paired mass to show the locations of PMD.
 perform_reactomics_analysis("ticmzccs.csv", "reactomics.csv")
 ```
 
@@ -296,7 +297,7 @@ perform_reactomics_analysis("ticmzccs.csv", "reactomics.csv")
 ```{r}
 # This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
 # - "ticmzccs.csv": The input peak file.
-# - "roireactomics.csv": The output file for the reactomics analysis.
+# - "roireactomics.csv": The output file for the reactomics analysis. The first two columns are the locations of pixels and following columns are quantitative results of PMDs. Each PMD contains three columns: one from lower mass, one from higher mass and one for the sum of paired mass to show the locations of PMD.
 # loading segmentation result and select roi segmentation class number
 seg <- fread("segmentation.csv")
 locindex <- seg$seg == 4
@@ -323,7 +324,7 @@ The input is peak list csv file and annotation csv file, and the output is csv f
 # This function generates a molecular network.
 # - "ticmzccs.csv": The input peak csv file from quantitative peaks list.
 # - "annoccs.csv": The annotation csv file from qualitative peaks list.
-# - "molecular_network.csv": The output file for the molecular network.
+# - "molecular_network.csv": The output file for the molecular network.  The first two columns show the paired peaks of the edge, and the following two columns as m/z of paired peaks with following two columns as original and rounded mass distances. The next column is mass defect of peaks.
 generate_molecular_network("ticmzccs.csv", "annoccs.csv", "molecular_network.csv")
 ```
 
@@ -341,6 +342,7 @@ library(pmd)
 data("sda")
 hfpmd <- round(sda$PMD,3)
 df <- rmwf::getpmddf2(dt,group = ioncluster$class,pmd=hfpmd,digits = 3)
+#  The first two columns show the paired peaks of the edge, and the following two columns as m/z of paired peaks with following two columns as original and rounded mass distances. The next column is mass defect of peaks and the next one is the spatial similarity of two ions. The following two columns are group number of ions if provided by the user based results from ion cluster analysis. The last column show if the the network is local or global based on the group number.
 fwrite(df,'msinet.csv')
 ```
 
