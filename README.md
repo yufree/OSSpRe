@@ -16,9 +16,9 @@ Part 1: Introduction: https://youtu.be/j26o3j2B1FI
 
 Part 2: Installation: https://youtu.be/l_3MuLlQbbc
 
-Part 3: Rmarkdown work-through: https://youtu.be/8pDd_4S36kw
+Part 3: Rmarkdown work-through: https://youtu.be/e_BcrRFrNCA
 
-Part 4: Shiny application: https://youtu.be/05F8O_G6Z8Q
+Part 4: Shiny application: https://youtu.be/W7lre03bUuc
 
 # Files
 
