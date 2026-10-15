@@ -57,6 +57,12 @@ For large datasets, it is recommended to run the workflow on a High-Performance 
 
 *Please check the code and update the paths for your own data.*
 
+# Testing
+
+A self-contained Colab notebook `OSSpRe_colab_test.ipynb` verifies the workflow on Linux: C++ compilation, peak alignment correctness and performance, ion mobility conversion against the Bruker library, and the full `helper.r` function suite, with the R environment restored from `renv.lock`. Open it directly in Colab (takes about 40-60 minutes, mostly compiling Bioconductor packages from source):
+
+https://colab.research.google.com/github/yufree/OSSpRe/blob/main/OSSpRe_colab_test.ipynb
+
 # Docker Usage
 
 OSSpRe workflow is also available through the [xcmsrocker](https://github.com/yufree/xcmsrocker) project.
