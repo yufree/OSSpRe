@@ -8,7 +8,6 @@
 #SBATCH --mem=700G
 #SBATCH --output=job.%j
 module load R
-export R_LIBS_USER=$HOME/.local/share/renv/library
 cd /path/to/this/folder
 Rscript -e 'if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")'
 Rscript -e 'renv::restore()'

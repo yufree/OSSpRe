@@ -35,7 +35,7 @@ Part 4: Shiny application: https://youtu.be/W7lre03bUuc
 
 1.  **Set the path to your raw data:** In the `workflow.Rmd` file, change the `path` variable to the path of your `.d` folder.
 2.  **Accept the Bruker EULA:** Set `accept_Bruker_EULA_and_on_Windows_or_Linux` to `TRUE` to accept the Bruker End User License Agreement.
-3.  **Run the workflow:** You can run the entire workflow by clicking the "Knit" button in RStudio or by running `rmarkdown::render('workflow.Rmd')` in the R console. You can also run each code chunk individually to better understand the process.
+3.  **Run the workflow:** The `workflow.Rmd` chunks are set to `eval = FALSE` by default (tutorial mode, since the data path is a placeholder). After setting the `path` variable to your `.d` folder, run each code chunk individually in RStudio to better understand the process, or switch the setup chunk to `eval = TRUE` and render with the "Knit" button or `rmarkdown::render('workflow.Rmd')`.
 
 # Workflow Steps
 
@@ -62,8 +62,8 @@ For large datasets, it is recommended to run the workflow on a High-Performance 
 OSSpRe workflow is also available through the [xcmsrocker](https://github.com/yufree/xcmsrocker) project.
 
 1.  Install Docker and run it on your system.
-2.  Pull the image from DockerHub: `docker pull yufree/deepspace:latest`
-3.  Run the image: `docker run -e PASSWORD=xcmsrocker -p 8787:8787 yufree/xcmsrocker`
+2.  Pull the image from DockerHub: `docker pull yufree/xcmsrocker:latest`
+3.  Run the image: `docker run -e PASSWORD=xcmsrocker -p 8787:8787 yufree/xcmsrocker:latest`
 4.  Open your browser and go to `http://localhost:8787` or `http://[your-ip-address]:8787`.
 5.  Log in to RStudio Server with username `rstudio` and password `xcmsrocker`.
 6.  To use the OSSpRe workflow, go to `File -> New File -> R Markdown...`, select `From Template`, choose `Mass Spectrometry Imaging Workflow`, and click `OK`.

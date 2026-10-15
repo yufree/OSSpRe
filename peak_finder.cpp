@@ -155,11 +155,21 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
                                                 int mz_bins = 100,
                                                 int ccs_bins = 100) {
   int n = mz.length();
+  if (n == 0) {
+    return DataFrame::create(Named("mz") = std::vector<double>(),
+                             Named("ccs") = std::vector<double>(),
+                             Named("intensity") = std::vector<double>());
+  }
   
   double mz_min = *std::min_element(mz.begin(), mz.end());
   double mz_max = *std::max_element(mz.begin(), mz.end());
   double ccs_min = *std::min_element(ccs.begin(), ccs.end());
   double ccs_max = *std::max_element(ccs.begin(), ccs.end());
+  
+  // Guard against degenerate ranges (e.g. all m/z values identical after
+  // rounding) that would make the grid bin computation divide by zero
+  if (!(mz_max > mz_min)) mz_max = mz_min + 1.0;
+  if (!(ccs_max > ccs_min)) ccs_max = ccs_min + 1.0;
   
   Grid2D grid(mz_bins, mz_min, mz_max, ccs_bins, ccs_min, ccs_max, mz, ccs);
   for (int i = 0; i < n; ++i) {
@@ -174,7 +184,11 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
             });
   
   // Each thread will have its own result vector to avoid race conditions.
+#ifdef _OPENMP
   std::vector<PeakResult> thread_results(omp_get_max_threads());
+#else
+  std::vector<PeakResult> thread_results(1);
+#endif
   
   std::vector<char> checked(n, 0);
   
@@ -183,7 +197,14 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
   for (int i = 0; i < n; ++i) {
     int idx = indices[i];
     
-    if (checked[idx]) {
+    // atomic read avoids the formal data race with the writes that happen
+    // inside the critical section below
+    char is_checked = 0;
+#ifdef _OPENMP
+#pragma omp atomic read
+#endif
+    is_checked = checked[idx];
+    if (is_checked) {
       continue;
     }
     
