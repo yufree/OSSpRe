@@ -10,6 +10,9 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
+# NOTE: chunks are NOT evaluated by default (eval = FALSE). This document is a
+# tutorial: set the raw data path in each chunk first, then run the chunks
+# one by one in RStudio (or change eval to TRUE) once the paths are configured.
 knitr::opts_chunk$set(echo = TRUE,eval = FALSE)
 ```
 
@@ -52,7 +55,7 @@ yrange <- c(1050,1600)
 # - outcoord: The output file for the coordinates. The location of pixels with frame number, x and y location.
 # - xrange: The x-range of the region of interest.
 # - yrange: The y-range of the region of interest.
-getrefpeak(path = path,accept_Bruker_EULA_and_on_Windows_or_Linux = accept_Bruker_EULA_and_on_Windows_or_Linux, batch_size = batch_size, outref = outref, outcoord = outcoord, xrange = xrange,yrange = yrange)
+getrefpeak(path = path,accept_Bruker_EULA_and_on_Windows_or_Linux = accept_Bruker_EULA_and_on_Windows_or_Linux, libpath = libpath, batch_size = batch_size, outref = outref, outcoord = outcoord, xrange = xrange,yrange = yrange)
 ```
 
 ## Reference peak picking
@@ -295,13 +298,14 @@ perform_reactomics_analysis("ticmzccs.csv", "reactomics.csv")
 ###  ROI specific reactomics analysis for ions in certain segmentation
 
 ```{r}
-# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
+# This function performs ROI specific reactomics analysis (same function with locindex).
 # - "ticmzccs.csv": The input peak file.
 # - "roireactomics.csv": The output file for the reactomics analysis. The first two columns are the locations of pixels and following columns are quantitative results of PMDs. Each PMD contains three columns: one from lower mass, one from higher mass and one for the sum of paired mass to show the locations of PMD.
+# - locindex: the logical index of pixels within the ROI from the segmentation result.
 # loading segmentation result and select roi segmentation class number
 seg <- fread("segmentation.csv")
 locindex <- seg$seg == 4
-perform_roi_reactomics_analysis("ticmzccs.csv", "roireactomics.csv", locindex = locindex)
+perform_reactomics_analysis("ticmzccs.csv", "roireactomics.csv", locindex = locindex)
 ```
 
 ###  Visualization of certain reaction (PMD)
@@ -323,9 +327,10 @@ The input is peak list csv file and annotation csv file, and the output is csv f
 ```{r}
 # This function generates a molecular network.
 # - "ticmzccs.csv": The input peak csv file from quantitative peaks list.
+# - "ioncluster.csv": The ion cluster csv file from the ion cluster step.
 # - "annoccs.csv": The annotation csv file from qualitative peaks list.
 # - "molecular_network.csv": The output file for the molecular network.  The first two columns show the paired peaks of the edge, and the following two columns as m/z of paired peaks with following two columns as original and rounded mass distances. The next column is mass defect of peaks.
-generate_molecular_network("ticmzccs.csv", "annoccs.csv", "molecular_network.csv")
+generate_molecular_network("ticmzccs.csv", "ioncluster.csv", "annoccs.csv", "molecular_network.csv")
 ```
 
 ### MSInet Shiny application
@@ -350,29 +355,27 @@ Please run the following chunk to get figures for ions.
 
 ```{r}
 # m/z and im
-dir.create('fig')
+dir.create('fig', showWarnings = FALSE)
 ions <- unique(c(df$from,df$to))
 mz <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) round(as.numeric(x[1]),4))
 im <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) as.numeric(x[2]))
-ions <- unique(c(df$from,df$to))
 name <- paste0(mz,'_',round(im))
-dt_values <- as.data.frame(dt_values)
 idx <- match(ions,name)+1
-sub <- dt[,..idx]
+sub <- as.data.frame(dt[,..idx])
 colnames(sub) <- ions
 x <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[1]))
 y <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[2]))
 width=max(x)-min(x)+1
 height=max(y)-min(y)+1
 for(i in 1:ncol(sub)){
-  dfx <- sub[,i]
-  norm <- (dfx - min(dfx)) / (max(dfx) - min(dfx))
-  library(RColorBrewer)
+  dfx <- sub[[i]]
+  rng <- max(dfx) - min(dfx)
+  norm <- if (rng > 0) (dfx - min(dfx)) / rng else rep(0, length(dfx))
   color_palette <- colorRamp(c("skyblue", "red"))
   color_sequence <- rgb(color_palette(norm)/255,alpha=1)
   png(paste0('fig/',colnames(sub)[i],'.png'),width = width, height = height)
-  plot.new()
   par(mar=c(0,0,0,0))
+  plot.new()
   plot.window(xlim = c(0,width), ylim = c(0,height), xaxs = "i", yaxs = "i", asp = NA)
   points(x-min(x)+1, y-min(y)+1, pch = 16, col = color_sequence,cex=0.3)
   dev.off()
