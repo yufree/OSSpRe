@@ -63,6 +63,18 @@ A self-contained Colab notebook `OSSpRe_colab_test.ipynb` verifies the workflow 
 
 https://colab.research.google.com/github/yufree/OSSpRe/blob/main/OSSpRe_colab_test.ipynb
 
+# Full Workflow on Real Data (Colab)
+
+`OSSpRe_workflow.ipynb` runs the **complete workflow on a real Bruker `.d`
+dataset**: it mounts Google Drive, restores the R environment from `renv.lock`,
+then walks through every `workflow.Rmd` step — reference peaks, 2D peak
+picking, the quantitative peak list, lipid/metabolite annotation, the
+exploratory analyses (segmentation, ion clustering, reactomics) and molecular
+networking — writing and displaying the results. Edit `/content/config.R` in
+the notebook to point at your own `.d` and ROI:
+
+https://colab.research.google.com/github/yufree/OSSpRe/blob/main/OSSpRe_workflow.ipynb
+
 # Docker Usage
 
 OSSpRe workflow is also available through the [xcmsrocker](https://github.com/yufree/xcmsrocker) project.

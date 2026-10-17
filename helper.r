@@ -251,6 +251,17 @@ getanno <- function(database,mode,peakpath,annofile, ppm = 10, deltaccs = 5){
   im <- sapply(strsplit(colnames(ref)[-1],'\\_'),function(x) as.numeric(x[2]))
   # align
   align <- enviGCMS::getalign(mz,lipid$mz,im,lipid$ccs,ppm=ppm,deltart = deltaccs)
+  # getalign() returns NULL when no peak is within tolerance; cbind.data.frame()
+  # then silently drops the NULL db_mz/db_im columns, and the merge() below
+  # fails on the missing keys. Short-circuit to a well-formed empty file.
+  if (is.null(align) || is.null(align$xid) || length(align$xid) == 0) {
+    message("No peak matched the database ", database, "; writing an empty annotation file.")
+    anno <- data.frame(mz = numeric(), im = numeric(),
+                       db_mz = numeric(), db_im = numeric())
+    lipidanno <- merge(anno, lipid, by.x = c('db_mz','db_im'), by.y = c('mz','ccs'))
+    fwrite(lipidanno, annofile)
+    return(invisible(lipidanno))
+  }
   anno <- cbind.data.frame(mz=mz[align$xid],im=im[align$xid],db_mz=align$mz2,db_im=align$rt2)
   lipidanno <- merge(anno,lipid,by.x = c('db_mz','db_im'),by.y = c('mz','ccs'))
   lipidanno <- lipidanno[!duplicated(lipidanno),]
@@ -564,7 +575,9 @@ save_pmd_images <- function(peak_file, pmd_values,filename){
   # imaging functions that use max - min + 1
   width = diff(range(xy$x)) + 1
   height = diff(range(xy$y)) + 1
-  png(filename,width*2, height*2,bg = 'transparent',res = 300)
+  # guard against "figure margins too large" on small ROIs: the legend panel
+  # uses mar = c(1,0,4,1), whose top margin exceeds a short canvas at 300 dpi
+  png(filename, max(width * 2, 600), max(height * 2, 600), bg = 'transparent', res = 300)
   layout(matrix(c(1, 2), nrow = 1, ncol = 2), widths = c(0.8, 0.2))
   par(mar=c(0,0,0,0))
   plot.new()
