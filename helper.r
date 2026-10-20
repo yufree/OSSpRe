@@ -91,7 +91,7 @@ getsummary <- function(peak_file) {
 #'@param xrange The x-range of the region of interest.
 #'@param yrange The y-range of the region of interest.
 #'@return A reference peak list.
-getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath = './', batch_size = 100000, outref, outcoord, xrange,yrange){
+getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath = './', batch_size = 5000, outref, outcoord, xrange,yrange){
   # columns to collect
   all_columns <- c('frame', 'intensity', 'mz', 'inv_ion_mobility')
   # download dll/so file if the EULA is accepted; otherwise fall back to an
@@ -162,8 +162,9 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath =
 #'@param yrange The y-range of the region of interest.
 #'@param mz_ppm The m/z tolerance in ppm used to match peaks to the reference list. Default is 20.
 #'@param ccs_tolerance The relative CCS tolerance used to match peaks to the reference list. Default is 0.03.
+#'@param batch_size The number of frames to process in each batch. Default is 5000.
 #'@return A quantitative peak list.
-getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coordpath, normpath, xrange, yrange, mz_ppm = 20, ccs_tolerance = 0.03){
+getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coordpath, normpath, xrange, yrange, mz_ppm = 20, ccs_tolerance = 0.03, batch_size = 5000){
   ref <- fread(refpath)
   setup_bruker_so(lib_path)
   all_columns = c('frame', 'intensity', 'mz', 'inv_ion_mobility')
@@ -175,7 +176,7 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   frame <- xy$MaldiFrameInfo$Frame[idx]
   # this setting will make sure the data.frame's row number is within the limits.
   # the upper cap avoids loading too many frames in a single query when ref is small
-  batch <- max(1, min(100000, floor(2e+09/nrow(ref))))
+  batch <- max(1, min(batch_size, floor(2e+09/nrow(ref))))
   batchs <- ceiling(total_frames/batch)
   result <- list()
   for(i in 1:batchs){
@@ -204,6 +205,8 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
       value.var = "normalized_intensity", 
       fun.aggregate = sum,
       fill = 0)
+    rm(data, resultt)
+    gc(verbose = FALSE)
   }
   result <- rbindlist(result,fill=T)
   if (ncol(result) < 2) {
