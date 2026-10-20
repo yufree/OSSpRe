@@ -80,6 +80,34 @@ getsummary <- function(peak_file) {
   cat("  Location Y range: ", y_range[1], " - ", y_range[2], "\n")
 }
 
+#'@title Safe Query for OpenTIMS with Binary-Split Error Recovery
+#'@description Queries frames from an OpenTIMS handle with automatic recursive binary-split isolation and skipping of corrupt/unreadable frames.
+#'@param handle OpenTIMS data handle.
+#'@param frames Integer vector of frame IDs.
+#'@param columns Character vector of column names.
+#'@param max_depth Maximum recursion depth. Default is 8.
+#'@return Named list of column vectors, or NULL if all frames are unreadable.
+safe_query <- function(handle, frames, columns, max_depth = 8) {
+  res <- tryCatch(
+    query(handle, frames = frames, columns = columns),
+    error = function(e) e
+  )
+  if (!inherits(res, "error")) return(res)
+  if (length(frames) <= 1 || max_depth <= 0) {
+    warning(sprintf("Skipped unreadable/corrupted frame(s): %s", paste(frames, collapse = ",")))
+    return(NULL)
+  }
+  mid <- floor(length(frames) / 2)
+  f1 <- frames[1:mid]
+  f2 <- frames[(mid + 1):length(frames)]
+  d1 <- safe_query(handle, f1, columns, max_depth - 1)
+  d2 <- safe_query(handle, f2, columns, max_depth - 1)
+  if (is.null(d1) && is.null(d2)) return(NULL)
+  if (is.null(d1)) return(d2)
+  if (is.null(d2)) return(d1)
+  lapply(names(d1), function(nm) c(d1[[nm]], d2[[nm]]))
+}
+
 #'@title Get Reference Peaks
 #'@description This function processes raw mass spectrometry data to generate a reference peak list.
 #'@param path The path to the raw data (e.g., .d folder).
@@ -101,7 +129,19 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath =
     if (!dir.exists(folder_to_stode_priopriatary_code)) {
       dir.create(folder_to_stode_priopriatary_code, recursive = TRUE, showWarnings = FALSE)
     }
-    path_to_bruker_dll = download_bruker_proprietary_code(folder_to_stode_priopriatary_code)
+    so_file <- if (.Platform$OS.type == 'windows') 'timsdata.dll' else 'libtimsdata.so'
+    target_so <- file.path(folder_to_stode_priopriatary_code, so_file)
+    if (!file.exists(target_so)) {
+      try({
+        py_lib <- system(sprintf("python3 -c 'import opentims_bruker_bridge, pathlib; print(pathlib.Path(opentims_bruker_bridge.__file__).parent / \"%s\")'", so_file), intern = TRUE)
+        if (file.exists(py_lib)) file.copy(py_lib, target_so)
+      }, silent = TRUE)
+    }
+    if (!file.exists(target_so)) {
+      path_to_bruker_dll = download_bruker_proprietary_code(folder_to_stode_priopriatary_code)
+    } else {
+      path_to_bruker_dll = target_so
+    }
     setup_bruker_so(path_to_bruker_dll)
     lib_file <- path_to_bruker_dll
   }else{
@@ -126,16 +166,17 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath =
   for (i in 1:total_batches) {
     batch_idx <- ((i - 1) * batch_size + 1):min(i * batch_size, total_frames)
 
-    data <- query(D, frames = frame[batch_idx], columns = all_columns)
+    data <- safe_query(D, frames = frame[batch_idx], columns = all_columns)
+    if (is.null(data) || length(data$frame) == 0) next
     data <- as.data.table(data)
     # round up to make sure binning is working and fit the mass/ion mobility accuracy
     data[, mz := round(mz, 4)]
     data[, inv_ion_mobility := round(inv_ion_mobility, 3)]
 
     dt <- data[, .(intensity = sum(intensity)), by = .(mz, inv_ion_mobility)]
-    dtx_list[[i]] <- dt
-    rm(data)
-    gc()
+    dtx_list[[length(dtx_list) + 1]] <- dt
+    rm(data, dt)
+    gc(verbose = FALSE)
   }
   # reshape the data by mz and ion mobility
   dtx <- rbindlist(dtx_list)
@@ -185,11 +226,16 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   for(i in 1:batchs){
     upper <- min(total_frames,i*batch)
     idx<- c(((i-1)*batch+1):upper)
-    data <- query(D, frames = frame[idx], columns = all_columns)
+    data <- safe_query(D, frames = frame[idx], columns = all_columns)
+    if (is.null(data) || length(data$frame) == 0) next
     data <- as.data.table(data)
     data[,ccs:=one_over_k0_to_ccs_parallel(data$inv_ion_mobility, rep(1,length(data$inv_ion_mobility)), data$mz, lib_path)]
     resultt <- findpeakalign(data$mz,data$ccs,data$intensity,data$frame,ref$mz,ref$ccs, ppm = mz_ppm, ccs_shift = ccs_tolerance)
     resultt <- as.data.table(resultt)
+    if (nrow(resultt) == 0) {
+      rm(data, resultt)
+      next
+    }
     if(method == 'tic'){
       # perform TIC normalization: divide by the total matched intensity of the
       # pixel (note: this only covers intensities matched to the reference list)
@@ -202,7 +248,7 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
       resultt[, normalized_intensity := as.numeric(intensity / rms), by = frame]
       resultt[, rms := NULL]
     }
-    result[[i]] <- dcast(
+    result[[length(result) + 1]] <- dcast(
       resultt, 
       frame ~ mz_ccs, 
       value.var = "normalized_intensity", 
