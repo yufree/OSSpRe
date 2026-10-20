@@ -40,8 +40,8 @@ outref = 'refpeak.csv'
 outcoord = 'coord.csv'
 # accept Bruker's lisence
 accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE
-# set the pixel batch size to generate super pixel
-batch_size <- 100000
+# set the pixel batch size to generate super pixel (5000 is safe for 12GB-50GB RAM)
+batch_size <- 5000
 # set pixel range
 xrange <- c(3400,3900)
 yrange <- c(1050,1600)
@@ -133,7 +133,8 @@ ccs_tolerance <- 0.03
 # - yrange: The y-range of the region of interest.
 # - mz_ppm: The m/z tolerance in ppm.
 # - ccs_tolerance: The CCS tolerance.
-getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange, mz_ppm = mz_ppm, ccs_tolerance = ccs_tolerance)
+# - batch_size: The batch size of frames.
+getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange, mz_ppm = mz_ppm, ccs_tolerance = ccs_tolerance, batch_size = batch_size)
 ```
 
 # Qualitative Peaks List
