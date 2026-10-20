@@ -98,6 +98,9 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath =
   # already downloaded library in libpath
   if (accept_Bruker_EULA_and_on_Windows_or_Linux) {
     folder_to_stode_priopriatary_code = libpath
+    if (!dir.exists(folder_to_stode_priopriatary_code)) {
+      dir.create(folder_to_stode_priopriatary_code, recursive = TRUE, showWarnings = FALSE)
+    }
     path_to_bruker_dll = download_bruker_proprietary_code(folder_to_stode_priopriatary_code)
     setup_bruker_so(path_to_bruker_dll)
     lib_file <- path_to_bruker_dll
