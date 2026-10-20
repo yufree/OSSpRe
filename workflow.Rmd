@@ -40,8 +40,8 @@ outref = 'refpeak.csv'
 outcoord = 'coord.csv'
 # accept Bruker's lisence
 accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE
-# set the pixel batch size to generate super pixel (5000 is safe for 12GB-50GB RAM)
-batch_size <- 5000
+# set the pixel batch size to generate super pixel (25000 is optimal for 50GB High-RAM)
+batch_size <- 25000
 # set pixel range
 xrange <- c(3400,3900)
 yrange <- c(1050,1600)

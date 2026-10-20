@@ -85,13 +85,13 @@ getsummary <- function(peak_file) {
 #'@param path The path to the raw data (e.g., .d folder).
 #'@param accept_Bruker_EULA_and_on_Windows_or_Linux Set to TRUE to accept the Bruker EULA.
 #'@param libpath The path to the Bruker library files.
-#'@param batch_size The number of frames to process in each batch.
+#'@param batch_size The number of frames to process in each batch. Default is 25000 (optimized for 50GB RAM environments).
 #'@param outref The output file for the reference peaks.
 #'@param outcoord The output file for the coordinates.
 #'@param xrange The x-range of the region of interest.
 #'@param yrange The y-range of the region of interest.
 #'@return A reference peak list.
-getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath = './', batch_size = 5000, outref, outcoord, xrange,yrange){
+getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath = './', batch_size = 25000, outref, outcoord, xrange,yrange){
   # columns to collect
   all_columns <- c('frame', 'intensity', 'mz', 'inv_ion_mobility')
   # download dll/so file if the EULA is accepted; otherwise fall back to an
@@ -165,9 +165,9 @@ getrefpeak <- function(path,accept_Bruker_EULA_and_on_Windows_or_Linux,libpath =
 #'@param yrange The y-range of the region of interest.
 #'@param mz_ppm The m/z tolerance in ppm used to match peaks to the reference list. Default is 20.
 #'@param ccs_tolerance The relative CCS tolerance used to match peaks to the reference list. Default is 0.03.
-#'@param batch_size The number of frames to process in each batch. Default is 5000.
+#'@param batch_size The number of frames to process in each batch. Default is 25000 (optimized for 50GB RAM environments).
 #'@return A quantitative peak list.
-getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coordpath, normpath, xrange, yrange, mz_ppm = 20, ccs_tolerance = 0.03, batch_size = 5000){
+getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coordpath, normpath, xrange, yrange, mz_ppm = 20, ccs_tolerance = 0.03, batch_size = 25000){
   ref <- fread(refpath)
   setup_bruker_so(lib_path)
   all_columns = c('frame', 'intensity', 'mz', 'inv_ion_mobility')
