@@ -1,6 +1,7 @@
 library(opentimsr)
 library(data.table)
 library(Rcpp)
+if (file.exists("helper.r")) source("helper.r")
 
 # set the path to the .d folder
 path = 'PATH_TO_RAW.d'
@@ -35,15 +36,16 @@ dtx_list <- list()
 for (i in 1:total_batches) {
   batch_idx <- ((i - 1) * batch_size + 1):min(i * batch_size, total_frames)
 
-  data <- query(D, frames = frame[batch_idx], columns = all_columns)
+  data <- if (exists("safe_query")) safe_query(D, frames = frame[batch_idx], columns = all_columns) else query(D, frames = frame[batch_idx], columns = all_columns)
+  if (is.null(data) || length(data$frame) == 0) next
   data <- as.data.table(data)
   data[, mz := round(mz, 4)]
   data[, inv_ion_mobility := round(inv_ion_mobility, 3)]
 
   dt <- data[, .(intensity = sum(intensity)), by = .(mz, inv_ion_mobility)]
-  dtx_list[[i]] <- dt
-  rm(data)
-  gc()
+  dtx_list[[length(dtx_list) + 1]] <- dt
+  rm(data, dt)
+  gc(verbose = FALSE)
 }
 
 dtx <- rbindlist(dtx_list)
