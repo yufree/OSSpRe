@@ -27,8 +27,8 @@ xy <- table2df(D, "MaldiFrameInfo")
 idx <- which(xy$MaldiFrameInfo$XIndexPos>2900&xy$MaldiFrameInfo$XIndexPos<3000)
 total_frames <- length(idx)
 frame <- xy$MaldiFrameInfo$Frame[idx]
-# set a batch size to avoid memory issues by process the data in batches (5000 is safe for 12GB-50GB RAM)
-batch_size <- 5000
+# set a batch size to avoid memory issues by process the data in batches (25000 is optimal for 50GB High-RAM)
+batch_size <- 25000
 total_batches <- ceiling(total_frames / batch_size)
 # process the data in batches with memory release
 dtx_list <- list()

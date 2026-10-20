@@ -15,7 +15,7 @@ yrange <- c(0, 10000)
 # set the uncertainty of mz and ccs (must match the values used in refpeakpicking.R)
 mz_ppm <- 20
 ccs_tolerance <- 0.03
-batch_size <- 5000
+batch_size <- 25000
 
 # run the function
 getqlist(refpath = refpath,
