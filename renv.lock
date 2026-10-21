@@ -5707,7 +5707,7 @@
     },
     "rmwf": {
       "Package": "rmwf",
-      "Version": "0.1.3",
+      "Version": "0.1.4",
       "Source": "GitHub",
       "Title": "Reproducilble Metabolomics WorkFlow",
       "Authors@R": "person(given = \"Miao\", family = \"Yu\", role = c(\"aut\", \"cre\"), email = \"yufreecas@gmail.com\")",
@@ -5757,7 +5757,7 @@
       "RemoteRepo": "rmwf",
       "RemoteUsername": "yufree",
       "RemoteRef": "HEAD",
-      "RemoteSha": "819f8c308016153f9da0b8cc03889520f2e0a853",
+      "RemoteSha": "efd89db99f2a1300b43134523e168fedcec4f56b",
       "NeedsCompilation": "no",
       "Author": "Miao Yu [aut, cre]",
       "Maintainer": "Miao Yu <yufreecas@gmail.com>"
