@@ -157,8 +157,8 @@ annofile = 'annoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
-# - ppm: annotation mass accuracy for m/z, default 10
-# - deltaccs: annotation ccs shift, default 5 
+# - ppm: annotation mass accuracy for m/z, default 20 (TOF)
+# - deltaccs: annotation absolute CCS shift in Å², default 5 (≈1.5–2.6% over 190–330 Å²)
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
@@ -176,8 +176,8 @@ annofile = 'metaannoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
-# - ppm: annotation mass accuracy for m/z, default 10
-# - deltaccs: annotation ccs shift, default 5 
+# - ppm: annotation mass accuracy for m/z, default 20 (TOF)
+# - deltaccs: annotation absolute CCS shift in Å², default 5 (≈1.5–2.6% over 190–330 Å²)
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
