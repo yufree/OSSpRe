@@ -285,10 +285,10 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
 #'@param mode The ionization mode ('pos' or 'neg').
 #'@param peakpath The path to the peak list file.
 #'@param annofile The output file for the annotations.
-#'@param ppm The m/z tolerance in ppm. Default is 10.
-#'@param deltaccs The CCS tolerance. Default is 5.
+#'@param ppm The m/z tolerance in ppm. Default is 20 (suitable for TOF instruments such as the timsTOF fleX).
+#'@param deltaccs The absolute CCS tolerance in squared angstrom (Å²). Default is 5.
 #'@return An annotated peak list.
-getanno <- function(database,mode,peakpath,annofile, ppm = 10, deltaccs = 5){
+getanno <- function(database,mode,peakpath,annofile, ppm = 20, deltaccs = 5){
   lipid <- fread(database)
   # set mode
   if(mode == 'pos'){
