@@ -77,11 +77,11 @@ https://colab.research.google.com/github/yufree/OSSpRe/blob/main/OSSpRe_workflow
 
 # Docker Usage
 
-OSSpRe workflow is also available through the [xcmsrocker](https://github.com/yufree/xcmsrocker) project.
+OSSpRe workflow is also available through the [xcmsrocker](https://github.com/yufree/xcmsrocker) project via the specialized `deepspace` container image.
 
 1.  Install Docker and run it on your system.
-2.  Pull the image from DockerHub: `docker pull yufree/xcmsrocker:latest`
-3.  Run the image: `docker run -e PASSWORD=xcmsrocker -p 8787:8787 yufree/xcmsrocker:latest`
+2.  Pull the image from DockerHub: `docker pull yufree/deepspace:latest`
+3.  Run the image: `docker run -e PASSWORD=xcmsrocker -p 8787:8787 yufree/deepspace:latest`
 4.  Open your browser and go to `http://localhost:8787` or `http://[your-ip-address]:8787`.
 5.  Log in to RStudio Server with username `rstudio` and password `xcmsrocker`.
 6.  To use the OSSpRe workflow, go to `File -> New File -> R Markdown...`, select `From Template`, choose `Mass Spectrometry Imaging Workflow`, and click `OK`.
