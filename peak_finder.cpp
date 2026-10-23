@@ -1,7 +1,10 @@
 #include <Rcpp.h>
 // [[Rcpp::plugins(openmp)]]
-#ifdef _OPENMP
+#if defined(_OPENMP) && __has_include(<omp.h>)
 #include <omp.h>
+#else
+inline int omp_get_max_threads() { return 1; }
+inline int omp_get_thread_num() { return 0; }
 #endif
 #include <algorithm>
 #include <numeric>
@@ -76,6 +79,76 @@ struct Grid2D {
       }
     }
     return result;
+  }
+  
+  // Zero-allocation short-circuit local maximum test.
+  // In mass spectrometry datasets, >98% of points are on peak slopes or noise.
+  // Directly iterating the grid cells and checking intensity >= current_intensity
+  // terminates in 1-3 iterations for non-peaks without allocating any std::vector.
+  bool is_local_maximum(int current_idx, double mz, double ccs, double current_intensity,
+                        double mz_window, double ccs_window,
+                        const NumericVector& intensity) const {
+    int mz_start = std::max(0,
+                            static_cast<int>((mz - mz_window - mz_min) / (mz_max - mz_min) * mz_bins) - 1
+    );
+    int mz_end = std::min(mz_bins - 1,
+                          static_cast<int>((mz + mz_window - mz_min) / (mz_max - mz_min) * mz_bins) + 1
+    );
+    int ccs_start = std::max(0,
+                             static_cast<int>((ccs - ccs_window - ccs_min) / (ccs_max - ccs_min) * ccs_bins) - 1
+    );
+    int ccs_end = std::min(ccs_bins - 1,
+                           static_cast<int>((ccs + ccs_window - ccs_min) / (ccs_max - ccs_min) * ccs_bins) + 1
+    );
+    
+    for (int i = mz_start; i <= mz_end; ++i) {
+      for (int j = ccs_start; j <= ccs_end; ++j) {
+        for (int idx : cells[i][j]) {
+          if (idx == current_idx) continue;
+          if (intensity[idx] >= current_intensity) {
+            double mz_diff = std::abs(mz_values[idx] - mz);
+            if (mz_diff <= mz_window) {
+              double ccs_diff = std::abs(ccs_values[idx] - ccs);
+              if (ccs_diff <= ccs_window) {
+                return false; // Found a strictly higher/equal neighbor: not a local maximum!
+              }
+            }
+          }
+        }
+      }
+    }
+    return true;
+  }
+  
+  // Directly mark neighbors as checked in 1x window to suppress shoulder bins
+  void mark_checked(std::vector<char>& checked, double mz, double ccs,
+                     double mz_window, double ccs_window) const {
+    int mz_start = std::max(0,
+                            static_cast<int>((mz - mz_window - mz_min) / (mz_max - mz_min) * mz_bins) - 1
+    );
+    int mz_end = std::min(mz_bins - 1,
+                          static_cast<int>((mz + mz_window - mz_min) / (mz_max - mz_min) * mz_bins) + 1
+    );
+    int ccs_start = std::max(0,
+                             static_cast<int>((ccs - ccs_window - ccs_min) / (ccs_max - ccs_min) * ccs_bins) - 1
+    );
+    int ccs_end = std::min(ccs_bins - 1,
+                           static_cast<int>((ccs + ccs_window - ccs_min) / (ccs_max - ccs_min) * ccs_bins) + 1
+    );
+    
+    for (int i = mz_start; i <= mz_end; ++i) {
+      for (int j = ccs_start; j <= ccs_end; ++j) {
+        for (int idx : cells[i][j]) {
+          double mz_diff = std::abs(mz_values[idx] - mz);
+          if (mz_diff <= mz_window) {
+            double ccs_diff = std::abs(ccs_values[idx] - ccs);
+            if (ccs_diff <= ccs_window) {
+              checked[idx] = 1;
+            }
+          }
+        }
+      }
+    }
   }
 };
 
@@ -225,14 +298,12 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
     double mz_window_1x = current_mz * mz_ppm * 1e-6;
     double ccs_window_1x = current_ccs * ccs_window_factor;
     
-    // FAST PATH: Test 1x local maximum FIRST.
+    // FAST PATH: Test 1x local maximum directly with ZERO heap allocations.
     // In mass spectrometry data, >98% of points are not local maxima.
-    // Querying the smaller 1x window and testing for higher neighbors avoids
-    // expensive 2x neighborhood queries and noise median sorting for non-peaks.
-    std::vector<int> nearby_points_1x = grid.get_nearby_points(current_mz, current_ccs, mz_window_1x, ccs_window_1x, false);
-    bool is_peak = check_if_peak_2d(nearby_points_1x, intensity, current_intensity, mz, ccs, current_mz, current_ccs, mz_window_1x, ccs_window_1x);
-    
-    if (!is_peak) {
+    // Testing grid cells directly and exiting on the first higher neighbor avoids
+    // allocating millions of std::vector<int> instances.
+    if (!grid.is_local_maximum(idx, current_mz, current_ccs, current_intensity,
+                               mz_window_1x, ccs_window_1x, intensity)) {
       checked[idx] = 1;
       continue;
     }
@@ -258,9 +329,8 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
         thread_results[thread_num].ccs.push_back(current_ccs);
         thread_results[thread_num].intensity.push_back(current_intensity);
         
-        for (int j : nearby_points_1x) {
-          checked[j] = 1;
-        }
+        // Suppress shoulder bins in 1x window to prevent duplicate peaks
+        grid.mark_checked(checked, current_mz, current_ccs, mz_window_1x, ccs_window_1x);
       }
     }
   }
