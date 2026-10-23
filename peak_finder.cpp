@@ -85,7 +85,7 @@ struct PeakResult {
   std::vector<double> intensity;
 };
 
-// Reverted to the more robust median-based noise calculation.
+// Reverted to the more robust median-based noise calculation with O(K) nth_element.
 double compute_noise_2d(const std::vector<int>& nearby_points,
                         const NumericVector& intensity,
                         double mz,
@@ -97,6 +97,7 @@ double compute_noise_2d(const std::vector<int>& nearby_points,
                         const NumericVector& mz_values,
                         const NumericVector& ccs_values) {
   std::vector<double> noise_values;
+  noise_values.reserve(nearby_points.size());
   for (int j : nearby_points) {
     double mz_diff = std::abs(mz_values[j] - mz);
     double ccs_diff = std::abs(ccs_values[j] - ccs);
@@ -111,13 +112,16 @@ double compute_noise_2d(const std::vector<int>& nearby_points,
     return 1.0; // Return a default low noise value if no points are in the noise region
   }
   
-  std::sort(noise_values.begin(), noise_values.end());
-  
   size_t size = noise_values.size();
-  if (size % 2 == 0) {
-    return (noise_values[size / 2 - 1] + noise_values[size / 2]) / 2.0;
+  size_t mid = size / 2;
+  std::nth_element(noise_values.begin(), noise_values.begin() + mid, noise_values.end());
+  
+  if (size % 2 == 1) {
+    return noise_values[mid];
   } else {
-    return noise_values[size / 2];
+    double val1 = noise_values[mid];
+    double val2 = *std::max_element(noise_values.begin(), noise_values.begin() + mid);
+    return (val1 + val2) / 2.0;
   }
 }
 
@@ -212,42 +216,52 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
     double current_ccs = ccs[idx];
     double current_intensity = intensity[idx];
     
+    // Guard against NaN/Inf or non-positive intensity
+    if (std::isnan(current_mz) || std::isnan(current_ccs) || std::isnan(current_intensity) || current_intensity <= 0.0) {
+      checked[idx] = 1;
+      continue;
+    }
+    
     double mz_window_1x = current_mz * mz_ppm * 1e-6;
-    double mz_window_2x = 2 * mz_window_1x;
     double ccs_window_1x = current_ccs * ccs_window_factor;
+    
+    // FAST PATH: Test 1x local maximum FIRST.
+    // In mass spectrometry data, >98% of points are not local maxima.
+    // Querying the smaller 1x window and testing for higher neighbors avoids
+    // expensive 2x neighborhood queries and noise median sorting for non-peaks.
+    std::vector<int> nearby_points_1x = grid.get_nearby_points(current_mz, current_ccs, mz_window_1x, ccs_window_1x, false);
+    bool is_peak = check_if_peak_2d(nearby_points_1x, intensity, current_intensity, mz, ccs, current_mz, current_ccs, mz_window_1x, ccs_window_1x);
+    
+    if (!is_peak) {
+      checked[idx] = 1;
+      continue;
+    }
+    
+    // SLOW PATH: Only candidate local maxima compute the 2x noise median.
+    double mz_window_2x = 2 * mz_window_1x;
     double ccs_window_2x = 2 * ccs_window_1x;
     
     std::vector<int> nearby_points_2x = grid.get_nearby_points(current_mz, current_ccs, mz_window_1x, ccs_window_1x, true);
     double noise_median = compute_noise_2d(nearby_points_2x, intensity, current_mz, current_ccs, mz_window_2x, mz_window_1x, ccs_window_2x, ccs_window_1x, mz, ccs);
     
     if (current_intensity < snr_threshold * noise_median) {
+      checked[idx] = 1;
       continue;
     }
     
-    std::vector<int> nearby_points_1x = grid.get_nearby_points(current_mz, current_ccs, mz_window_1x, ccs_window_1x, false);
-    bool is_peak = check_if_peak_2d(nearby_points_1x, intensity, current_intensity, mz, ccs, current_mz, current_ccs, mz_window_1x, ccs_window_1x);
-    
-    if (is_peak) {
-      // FIX 4 (LOGIC & PERFORMANCE): Use a critical section ONLY when a peak is confirmed.
-      // This is the only time we need to synchronize threads.
+    // Confirmed peak: synchronize across threads and register
 #pragma omp critical
-{
-  // We must re-check the flag inside the critical section. This handles the rare
-  // edge case where two threads find peaks in the same neighborhood simultaneously.
-  // Only the first thread to enter this section will claim the peak.
-  if (!checked[idx]) {
-    int thread_num = omp_get_thread_num();
-    thread_results[thread_num].mz.push_back(current_mz);
-    thread_results[thread_num].ccs.push_back(current_ccs);
-    thread_results[thread_num].intensity.push_back(current_intensity);
-    
-    // FIX 5 (LOGIC): Mark the peak and its neighbors as checked ONLY after
-    // it has been confirmed and added to the results.
-    for (int j : nearby_points_1x) {
-      checked[j] = 1;
-    }
-  }
-}
+    {
+      if (!checked[idx]) {
+        int thread_num = omp_get_thread_num();
+        thread_results[thread_num].mz.push_back(current_mz);
+        thread_results[thread_num].ccs.push_back(current_ccs);
+        thread_results[thread_num].intensity.push_back(current_intensity);
+        
+        for (int j : nearby_points_1x) {
+          checked[j] = 1;
+        }
+      }
     }
   }
   
