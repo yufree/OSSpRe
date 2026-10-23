@@ -105,12 +105,12 @@ struct Grid2D {
       for (int j = ccs_start; j <= ccs_end; ++j) {
         for (int idx : cells[i][j]) {
           if (idx == current_idx) continue;
-          if (intensity[idx] >= current_intensity) {
+          if (intensity[idx] > current_intensity || (intensity[idx] == current_intensity && idx < current_idx)) {
             double mz_diff = std::abs(mz_values[idx] - mz);
             if (mz_diff <= mz_window) {
               double ccs_diff = std::abs(ccs_values[idx] - ccs);
               if (ccs_diff <= ccs_window) {
-                return false; // Found a strictly higher/equal neighbor: not a local maximum!
+                return false; // Found a strictly higher neighbor (or equal with lower index): not a local maximum!
               }
             }
           }
