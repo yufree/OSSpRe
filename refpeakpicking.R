@@ -85,5 +85,12 @@ ccs_tolerance <- 0.03
 snr <- 3
 mz_bins <- 1000
 ccs_bins <- 50
+
+# Remove NAs if any
+dtx <- na.omit(dtx)
+if (nrow(dtx) > 200000) {
+  dtx <- dtx[intensity > 1, ]
+}
+
 result <- find_2d_peaks(dtx$mz,dtx$ccs,dtx$intensity,mz_ppm,ccs_tolerance,snr,mz_bins,ccs_bins)
 fwrite(result,'ref2d.csv')
