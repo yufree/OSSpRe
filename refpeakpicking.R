@@ -64,9 +64,9 @@ sourceCpp("peak_finder.cpp")
 find_2d_peaks <- function(mz, ccs, intensity,
                           mz_ppm = 20,
                           ccs_tolerance = 0.03,
-                          snr = 3.0,
-                          mz_bins = 1000,
-                          ccs_bins = 50) {
+                          snr = 10.0,
+                          mz_bins = 20000,
+                          ccs_bins = 250) {
 
   if (!is.numeric(mz) || !is.numeric(ccs) || !is.numeric(intensity)) {
     stop("All inputs must be numeric vectors")
@@ -82,15 +82,12 @@ find_2d_peaks <- function(mz, ccs, intensity,
 
 mz_ppm <- 20
 ccs_tolerance <- 0.03
-snr <- 3
-mz_bins <- 1000
-ccs_bins <- 50
+snr <- 10.0
+mz_bins <- 20000
+ccs_bins <- 250
 
 # Remove NAs if any
 dtx <- na.omit(dtx)
-if (nrow(dtx) > 200000) {
-  dtx <- dtx[intensity > 1, ]
-}
 
 result <- find_2d_peaks(dtx$mz,dtx$ccs,dtx$intensity,mz_ppm,ccs_tolerance,snr,mz_bins,ccs_bins)
 fwrite(result,'ref2d.csv')

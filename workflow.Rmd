@@ -73,9 +73,9 @@ library(data.table)
 dtx <- fread('refpeak.csv')
 mz_ppm <- 20
 ccs_tolerance <- 0.03
-snr <- 3
-mz_bins <- 1000
-ccs_bins <- 50
+snr <- 10
+mz_bins <- 20000
+ccs_bins <- 250
 
 # This function performs 2D peak picking.
 # - dtx$mz: The m/z values.
