@@ -27,16 +27,16 @@ sourceCpp("peak_finder.cpp")
 #'@param intensity A numeric vector of intensity values.
 #'@param mz_ppm The m/z tolerance in ppm. Default is 20.
 #'@param ccs_tolerance The CCS tolerance. Default is 0.03.
-#'@param snr The signal-to-noise ratio cutoff. Default is 3.
-#'@param mz_bins The number of m/z bins. Default is 1000.
-#'@param ccs_bins The number of CCS bins. Default is 50.
+#'@param snr The signal-to-noise ratio cutoff. Default is 10 (LOQ physical threshold).
+#'@param mz_bins The number of m/z bins. Default is 20000.
+#'@param ccs_bins The number of CCS bins. Default is 250.
 #'@return A data.table with the 2D peaks.
 find_2d_peaks <- function(mz, ccs, intensity, 
                           mz_ppm = 20, 
                           ccs_tolerance = 0.03,
-                          snr = 3.0,
-                          mz_bins = 1000,
-                          ccs_bins = 50) {
+                          snr = 10.0,
+                          mz_bins = 20000,
+                          ccs_bins = 250) {
   
   if (!is.numeric(mz) || !is.numeric(ccs) || !is.numeric(intensity)) {
     stop("All inputs must be numeric vectors")
