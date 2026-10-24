@@ -502,37 +502,38 @@ perform_umap_segmentation <- function(peak_file, output_file, n_threads = 8, eps
 #'@return A file with the ion clusters and images for each cluster.
 perform_cluster_ions <- function(peak_file, output_file, locindex=NULL, hclust_cutoff = 0.6, min_cluster_size = 10, folder_name='cluster') {
   dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-  
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
   
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
   
   if(!is.null(locindex)){
-    subdt <- dt_values[locindex]
+    dt <- dt[locindex]
     x <- x[locindex]
     y <- y[locindex]
-  }else{
-    subdt <- dt_values
   }
   
-  Matrix <- t(subdt)  # rows = ions, cols = pixels
+  # Remove location column in-place before transpose to avoid holding redundant copies
+  dt[, location := NULL]
+  Matrix <- t(as.matrix(dt))  # rows = ions, cols = pixels
+  rm(dt)
+  gc(verbose = FALSE)
+  
   row_norms <- sqrt(rowSums(Matrix^2))
-  # guard: ions that are all-zero within the ROI (e.g. ions enriched outside the
-  # ROI) have norm 0 and would produce NaN similarities that crash hclust()
+  # guard: ions that are all-zero within the ROI have norm 0
   row_norms[!is.finite(row_norms) | row_norms == 0] <- 1
-  sim <- sweep(Matrix, 1, row_norms, "/")
+  sim <- Matrix / row_norms
   sim <- sim %*% t(sim)
   D_sim <- as.dist(1 - sim)
+  rm(sim)
+  gc(verbose = FALSE)
   
   hc <- hclust(D_sim)
   s <- cutree(hc, h = hclust_cutoff)
   
   name <- as.numeric(names(table(s)[table(s) > min_cluster_size]))
   
-  Matrix <- t(subdt)
   split_matrices <- lapply(name, function(category) {
     rows <- which(s == as.numeric(category))
     subset_matrix <- Matrix[rows, , drop = FALSE]
@@ -540,15 +541,15 @@ perform_cluster_ions <- function(peak_file, output_file, locindex=NULL, hclust_c
   })
   
   summed_matrices <- lapply(split_matrices, function(subset_matrix) {
-    # z-score each ion (row) across pixels, then average over the ions of this
-    # cluster for every pixel: the composite image of the cluster.
-    # constant ions (sd = 0) yield NaN in scale(); treat them as zeros
+    # z-score each ion (row) across pixels, then average over the ions of this cluster
     z <- t(scale(t(subset_matrix)))
     z[!is.finite(z)] <- 0
     colMeans(z)
   })
   
   result_matrix <- do.call(cbind, summed_matrices)
+  rm(Matrix, split_matrices)
+  gc(verbose = FALSE)
   
   clpan <- cbind.data.frame(x = x, y = y, result_matrix)
   
@@ -563,8 +564,6 @@ perform_cluster_ions <- function(peak_file, output_file, locindex=NULL, hclust_c
     ylim <- max(y) - min(y) + 1
     
     png(paste0(folder_name,'/cluster', name[i], '.png'), width = xlim, height = ylim)
-    # set margins BEFORE plot.new(): with the default margins plot.new() fails
-    # on small canvases ("figure margins too large")
     par(mar = c(0, 0, 0, 0))
     plot.new()
     plot.window(xlim = c(0, xlim), ylim = c(0, ylim), xaxs = "i", yaxs = "i", asp = NA)
@@ -585,76 +584,75 @@ perform_cluster_ions <- function(peak_file, output_file, locindex=NULL, hclust_c
 perform_reactomics_analysis <- function(peak_file, output_file, pmd = c(14.016,15.995,2.016,18.011), locindex = NULL) {
   
   dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-  
-  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
-  im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
   
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
-  xy <- cbind.data.frame(x,y)
+  xy <- data.frame(x = x, y = y)
   
-  if(!is.null(locindex)){
-    subdt <- dt_values[locindex]
-    xy <- xy[locindex,]
-  }else{
-    subdt <- dt_values
+  if (!is.null(locindex)) {
+    dt <- dt[locindex]
+    xy <- xy[locindex, , drop = FALSE]
   }
   
-  df <- getpmddf(mz, pmd = pmd, digits = 3)
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
   
+  # Drop location column in-place before matrix conversion to free heap memory
+  dt[, location := NULL]
+  mat <- as.matrix(dt)
+  rm(dt)
+  gc(verbose = FALSE)
+  
+  df <- pmd::getpmddf(mz, pmd = pmd, digits = 3)
   df$diff3 <- round(df$diff, 3)
   
-  # Fast vectorized row-wise normalization without creating 128k closure objects
-  submat <- as.matrix(subdt)
-  rm(subdt)
-  gc(verbose = FALSE)
-  row_max <- matrixStats::rowMaxs(submat, na.rm = TRUE)
+  # Fast vectorized row-wise normalization
+  row_max <- matrixStats::rowMaxs(mat, na.rm = TRUE)
   row_max[!is.finite(row_max) | row_max == 0] <- 1
-  dfall <- submat / row_max
-  dfall[is.na(dfall)] <- 0
-  rm(submat, row_max)
+  mat <- mat / row_max
+  mat[is.na(mat)] <- 0
+  rm(row_max)
   gc(verbose = FALSE)
   
   for (pmd_val in pmd) {
-    
     # Filter the PMD data frame for the current, exact pmd_val
     dff_group <- df[df$diff3 == pmd_val, ]
     
-    # Initialize sums as zero vectors
     pmd_h <- numeric(nrow(xy))
     pmd_l <- numeric(nrow(xy))
     
-    # Proceed only if PMD pairs were found for this value
     if (nrow(dff_group) > 0) {
-      
-      # Sum intensities for higher m/z values ('ms1')
-      dfms1 <- dfall[, mz %in% unique(dff_group$ms1), drop = FALSE]
-      if (ncol(dfms1) > 0) {
-        pmd_h <- rowSums(dfms1)
+      idx1 <- which(mz %in% unique(dff_group$ms1))
+      if (length(idx1) > 0) {
+        if (length(idx1) == 1) {
+          pmd_h <- mat[, idx1]
+        } else {
+          pmd_h <- matrixStats::rowSums2(mat, cols = idx1)
+        }
       }
       
-      # Sum intensities for lower m/z values ('ms2')
-      dfms2 <- dfall[, mz %in% unique(dff_group$ms2), drop = FALSE]
-      if (ncol(dfms2) > 0) {
-        pmd_l <- rowSums(dfms2)
+      idx2 <- which(mz %in% unique(dff_group$ms2))
+      if (length(idx2) > 0) {
+        if (length(idx2) == 1) {
+          pmd_l <- mat[, idx2]
+        } else {
+          pmd_l <- matrixStats::rowSums2(mat, cols = idx2)
+        }
       }
     }
     
-    # --- Store results in the output data frame ---
-    # Create a clean suffix for column names by replacing '.' with '_'
     col_suffix <- gsub(".", "_", as.character(pmd_val), fixed = TRUE)
-    
-    # Create dynamic column names
     h_col_name <- paste0("pmd", col_suffix, "h")
     l_col_name <- paste0("pmd", col_suffix, "l")
     total_col_name <- paste0("pmd", col_suffix)
     
-    # Assign the calculated sums to the new columns
     xy[[h_col_name]] <- pmd_h
     xy[[l_col_name]] <- pmd_l
     xy[[total_col_name]] <- pmd_h + pmd_l
   }
+  
+  rm(mat)
+  gc(verbose = FALSE)
+  
   fwrite(xy, output_file)
 }
 
