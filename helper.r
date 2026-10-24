@@ -410,17 +410,29 @@ plot_peak_stats <- function(peak_file) {
 perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, n_clusters = 5) {
   
   dt <- fread(peak_file, header = TRUE)
-  dt_values <- as.matrix(dt[, -1, with = FALSE])   # rows = pixels, cols = ions
-  
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
   
-  # center each ion (column) across pixels, then project the PIXELS (rows)
-  # onto the principal components; previous versions transposed the matrix
-  # several times and ended up clustering ions instead of pixels
-  mat_centered <- scale(dt_values, center = TRUE, scale = FALSE)
-  svd_result <- irlba(mat_centered, nv = n_components)
-  pca_scores <- mat_centered %*% svd_result$v      # rows = pixels, cols = PCs
+  # Delete location column in-place before matrix conversion to reduce memory footprint
+  dt[, location := NULL]
+  dt_values <- as.matrix(dt)
+  rm(dt)
+  gc(verbose = FALSE)
+  
+  # irlba supports centering natively via `center = col_means`
+  # WITHOUT explicitly creating an intermediate scale() dense matrix!
+  col_means <- colMeans(dt_values, na.rm = TRUE)
+  col_means[!is.finite(col_means)] <- 0
+  
+  svd_result <- irlba::irlba(dt_values, nv = n_components, center = col_means)
+  
+  # Immediately free the large input matrix before KMeans
+  rm(dt_values, col_means)
+  gc(verbose = FALSE)
+  
+  # In SVD: (A - 1*c^T) * V = U * Sigma.
+  # So projection scores are mathematically identical to U %*% Sigma (only 128k x 20, ~20 MB)
+  pca_scores <- t(t(svd_result$u) * svd_result$d)
   
   km <- KMeans_arma(as.matrix(pca_scores), clusters = n_clusters, n_iter = 10, seed_mode = "random_subset", verbose = TRUE, CENTROIDS = NULL)
   pr <- predict_KMeans(as.matrix(pca_scores), km)
@@ -576,15 +588,16 @@ perform_reactomics_analysis <- function(peak_file, output_file, pmd = c(14.016,1
   
   df$diff3 <- round(df$diff, 3)
   
-  # Normalize the intensity data for the ROI (row-wise) and transpose it
-  dfall <- t(apply(subdt, 1, function(x) {
-    max_val <- max(x, na.rm = TRUE)
-    if (!is.finite(max_val) || max_val == 0) {
-      return(rep(0, length(x)))
-    }
-    return(x / max_val)
-  }))
+  # Fast vectorized row-wise normalization without creating 128k closure objects
+  submat <- as.matrix(subdt)
+  rm(subdt)
+  gc(verbose = FALSE)
+  row_max <- matrixStats::rowMaxs(submat, na.rm = TRUE)
+  row_max[!is.finite(row_max) | row_max == 0] <- 1
+  dfall <- submat / row_max
   dfall[is.na(dfall)] <- 0
+  rm(submat, row_max)
+  gc(verbose = FALSE)
   
   for (pmd_val in pmd) {
     
