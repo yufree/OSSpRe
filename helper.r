@@ -226,6 +226,11 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   for(i in 1:batchs){
     upper <- min(total_frames,i*batch)
     idx<- c(((i-1)*batch+1):upper)
+    cat(sprintf("  [Batch %d/%d] Querying and aligning frames %s - %s...\n",
+                i, batchs,
+                format(((i - 1) * batch + 1), big.mark = ","),
+                format(upper, big.mark = ",")))
+    flush.console()
     data <- safe_query(D, frames = frame[idx], columns = all_columns)
     if (is.null(data) || length(data$frame) == 0) next
     data <- as.data.table(data)
@@ -251,6 +256,9 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
     # Aggregate duplicate matches for the same (frame, mz_ccs) within batch
     resultt_agg <- resultt[, .(normalized_intensity = sum(normalized_intensity)), by = .(frame, mz_ccs)]
     result[[length(result) + 1]] <- resultt_agg
+    cat(sprintf("  [Batch %d/%d] Done. Aligned %s pixel-feature hits.\n",
+                i, batchs, format(nrow(resultt_agg), big.mark = ",")))
+    flush.console()
     rm(data, resultt, resultt_agg)
     gc(verbose = FALSE)
   }
@@ -262,6 +270,10 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
     stop("No peak in the reference list was matched to the raw data; check the mz_ppm/ccs_tolerance settings.")
   }
 
+  cat(sprintf("All batches extracted (%s total hits). Filtering features with zero proportion <= %g%%...\n",
+              format(nrow(all_long), big.mark = ","), zero_proportion_cutoff * 100))
+  flush.console()
+
   # Calculate zero proportion directly on the sparse long table.
   # This avoids constructing an intermediate 70,000-column dense table (>80 GB RAM)
   # and ensures peak RAM stays safely below 15 GB on 50 GB Colab environments.
@@ -272,6 +284,11 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   if (length(columns_to_keep) == 0) {
     stop("No peak met the zero proportion cutoff; all peaks had too many zeros.")
   }
+
+  cat(sprintf("Retained %s curated features (present in >= %s pixels). Constructing wide normalized matrix...\n",
+              format(length(columns_to_keep), big.mark = ","),
+              format(min_present, big.mark = ",")))
+  flush.console()
 
   all_long_filtered <- all_long[mz_ccs %in% columns_to_keep]
   rm(all_long, feature_counts)
@@ -303,6 +320,11 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
   result_filtered[,location:=coord$location[match(result_filtered$frame,coord$Frame)]]
   setcolorder(result_filtered, c("location", setdiff(names(result_filtered), "location")))
   result_filtered[, frame := NULL]
+  cat(sprintf("Writing %s (%s pixels x %s features)...\n",
+              normpath,
+              format(nrow(result_filtered), big.mark = ","),
+              format(ncol(result_filtered) - 1, big.mark = ",")))
+  flush.console()
   fwrite(result_filtered,normpath)
 }
 
