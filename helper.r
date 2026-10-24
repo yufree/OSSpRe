@@ -248,28 +248,55 @@ getqlist <- function(refpath,lib_path,path, method, zero_proportion_cutoff, coor
       resultt[, normalized_intensity := as.numeric(intensity / rms), by = frame]
       resultt[, rms := NULL]
     }
-    result[[length(result) + 1]] <- dcast(
-      resultt, 
-      frame ~ mz_ccs, 
-      value.var = "normalized_intensity", 
-      fun.aggregate = sum,
-      fill = 0)
-    rm(data, resultt)
+    # Aggregate duplicate matches for the same (frame, mz_ccs) within batch
+    resultt_agg <- resultt[, .(normalized_intensity = sum(normalized_intensity)), by = .(frame, mz_ccs)]
+    result[[length(result) + 1]] <- resultt_agg
+    rm(data, resultt, resultt_agg)
     gc(verbose = FALSE)
   }
-  result <- rbindlist(result,fill=T)
-  if (ncol(result) < 2) {
+  all_long <- rbindlist(result)
+  rm(result)
+  gc(verbose = FALSE)
+
+  if (nrow(all_long) == 0) {
     stop("No peak in the reference list was matched to the raw data; check the mz_ppm/ccs_tolerance settings.")
   }
-  for (col in names(result)) {
-    set(result, i = which(is.na(result[[col]])), j = col, value = 0)
+
+  # Calculate zero proportion directly on the sparse long table.
+  # This avoids constructing an intermediate 70,000-column dense table (>80 GB RAM)
+  # and ensures peak RAM stays safely below 15 GB on 50 GB Colab environments.
+  feature_counts <- all_long[, .(n_pixels = uniqueN(frame)), by = mz_ccs]
+  min_present <- ceiling(total_frames * (1 - zero_proportion_cutoff))
+  columns_to_keep <- feature_counts[n_pixels >= min_present]$mz_ccs
+
+  if (length(columns_to_keep) == 0) {
+    stop("No peak met the zero proportion cutoff; all peaks had too many zeros.")
   }
-  # remove the peaks with zero_proportion larger than 95%
-  zero_proportion <- result[, lapply(.SD, function(x) mean(x == 0)), .SDcols = 2:ncol(result)]
-  columns_to_keep <- names(zero_proportion)[zero_proportion <= zero_proportion_cutoff]
-  cn <- columns_to_keep[!is.na(columns_to_keep)]
-  result_filtered <- result[, ..cn, with = FALSE]
-  result_filtered[,frame:=result$frame]
+
+  all_long_filtered <- all_long[mz_ccs %in% columns_to_keep]
+  rm(all_long, feature_counts)
+  gc(verbose = FALSE)
+
+  # Construct wide matrix ONLY for the retained features (e.g. ~7,442 curated features)
+  result_filtered <- dcast(
+    all_long_filtered, 
+    frame ~ mz_ccs, 
+    value.var = "normalized_intensity", 
+    fill = 0)
+  rm(all_long_filtered)
+  gc(verbose = FALSE)
+
+  # Ensure all requested ROI frames are represented
+  if (nrow(result_filtered) < total_frames) {
+    all_frames_dt <- data.table(frame = frame)
+    result_filtered <- merge(all_frames_dt, result_filtered, by = "frame", all.x = TRUE)
+    for (col in names(result_filtered)) {
+      if (col != "frame") {
+        set(result_filtered, i = which(is.na(result_filtered[[col]])), j = col, value = 0)
+      }
+    }
+  }
+
   # save the data with pixel location information
   coord <- fread(coordpath)
   coord[,location:=paste0(coord$XIndexPos,'_',coord$YIndexPos)]
