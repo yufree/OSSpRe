@@ -452,19 +452,36 @@ perform_pca_segmentation <- function(peak_file, output_file, n_components = 20, 
 #'@param eps The epsilon parameter for DBSCAN. Default is 0.2.
 #'@param minPts The minimum number of points for DBSCAN. Default is 20.
 #'@return A segmentation plot and a segmentation file.
-perform_umap_segmentation <- function(peak_file, output_file, n_threads = 50, eps = 0.2, minPts = 20) {
+perform_umap_segmentation <- function(peak_file, output_file, n_threads = 8, eps = 0.2, minPts = 20) {
   
   dt <- fread(peak_file, header = TRUE)
-  dt_values <- dt[, -1, with = FALSE]
-  
   x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
   y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  dt[, location := NULL]
   
-  mat <- t(dt_values)
-  Sys.setenv(NUMBA_NUM_THREADS = n_threads)
-  py_run_string(paste0("import os; print(os.environ['NUMBA_NUM_THREADS'])"))
+  # For high-dimensional spatial omics (>30 dimensions), running UMAP directly on raw dimensions
+  # causes catastrophic memory explosion (>50GB) and severe noise amplification.
+  # Standard spatial bioinformatics practice is to project onto the top 20 PCA components first.
+  dt_mat <- as.matrix(dt)
+  rm(dt)
+  gc(verbose = FALSE)
   
-  viz <- umap::umap(t(mat), method = 'umap-learn', metric = 'cosine')
+  if (ncol(dt_mat) > 30) {
+    col_means <- colMeans(dt_mat, na.rm = TRUE)
+    col_means[!is.finite(col_means)] <- 0
+    svd_res <- irlba::irlba(dt_mat, nv = 20, center = col_means)
+    rm(dt_mat, col_means)
+    gc(verbose = FALSE)
+    umap_input <- t(t(svd_res$u) * svd_res$d)
+  } else {
+    umap_input <- dt_mat
+    rm(dt_mat)
+    gc(verbose = FALSE)
+  }
+  
+  Sys.setenv(NUMBA_NUM_THREADS = as.character(min(as.integer(n_threads), 8)))
+  
+  viz <- umap::umap(umap_input, method = 'umap-learn', metric = 'cosine')
   dbscan_result <- dbscan(viz$layout, eps = eps, minPts = minPts)
   
   plot(x = x, y = y, col = dbscan_result$cluster+1,xlab='',ylab = '',main='',xaxt = "n", yaxt = "n",bty = "n",cex=0.1)
