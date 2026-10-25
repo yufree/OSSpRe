@@ -75,7 +75,7 @@ library(data.table)
 dtx <- fread('refpeak.csv')
 mz_ppm <- 20
 ccs_tolerance <- 0.03
-snr <- 3
+snr <- 10
 mz_bins <- 1000
 ccs_bins <- 50
 

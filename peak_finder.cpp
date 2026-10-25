@@ -228,7 +228,7 @@ DataFrame find_2d_peaks_spatial_parallel_openmp(NumericVector mz,
                                                 NumericVector intensity,
                                                 double mz_ppm = 20.0,
                                                 double ccs_window_factor = 0.05,
-                                                double snr_threshold = 3.0,
+                                                double snr_threshold = 10.0,
                                                 int mz_bins = 100,
                                                 int ccs_bins = 100) {
   int n = mz.length();
