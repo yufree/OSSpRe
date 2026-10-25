@@ -27,6 +27,8 @@ source('helper.r')
 
 Peaks from all pixels will be added together as one super pixel for reference peak picking. 
 
+The demonstration raw dataset (`.d`) can be downloaded from Zenodo: https://doi.org/10.5281/zenodo.15863066. Download and extract the `.d` directory to your local or cloud storage and set `path` below to point to it.
+
 The input is the raw data and the output is the super pixel data with m/z, ccs and intensity as csv file.
 
 ```{r}
@@ -40,8 +42,8 @@ outref = 'refpeak.csv'
 outcoord = 'coord.csv'
 # accept Bruker's lisence
 accept_Bruker_EULA_and_on_Windows_or_Linux = TRUE
-# set the pixel batch size to generate super pixel (25000 is optimal for 50GB High-RAM)
-batch_size <- 25000
+# set the pixel batch size to generate super pixel
+batch_size <- 100000
 # set pixel range
 xrange <- c(3400,3900)
 yrange <- c(1050,1600)
@@ -64,34 +66,30 @@ This part will be used to find reference peaks across the sample.
 
 ### Reference peak picking
 
-Set the parameters for peak picking and perform peak picking on super pixels. The default setting will keep all the local max peaks found in the super pixel. However, most of the peaks with smaller intensity will not be retained in the following filtering analysis and more peaks will use more computational resources for peak picking. In this case, intensity cutoff could be carefully set depending on the sensitivity of the instrument and the mean/median value of all the peaks' intensity could be the first choice.
+Set the parameters for peak picking and perform 2D peak picking on the super pixel. The algorithm (`find_2d_peaks`) identifies local maxima within a dynamic m/z-ppm × CCS window and applies a signal-to-noise ratio (SNR) donut filter to retain significant reference peaks while suppressing background noise.
 
-The input of the function would be the output csv file from previous step and the output will be the reference peaks list with m/z, ccs and intensity as csv file.
+The input is the super pixel CSV file from the previous step, and the output is the reference peak list (`ref2d.csv`) with m/z, CCS, and intensity.
 
 ```{r}
 library(data.table)
 dtx <- fread('refpeak.csv')
 mz_ppm <- 20
 ccs_tolerance <- 0.03
-snr <- 10
-mz_bins <- 20000
-ccs_bins <- 250
+snr <- 3
+mz_bins <- 1000
+ccs_bins <- 50
 
-# This function performs 2D peak picking.
+# This function performs 2D peak picking with spatial partitioning and SNR filtering.
 # - dtx$mz: The m/z values.
 # - dtx$ccs: The CCS values.
 # - dtx$intensity: The intensity values.
 # - mz_ppm: The m/z tolerance in ppm.
-# - ccs_tolerance: The CCS tolerance.
+# - ccs_tolerance: The CCS relative tolerance.
 # - snr: The signal-to-noise ratio cutoff.
 # - mz_bins: The number of m/z bins.
 # - ccs_bins: The number of CCS bins.
 result <- find_2d_peaks(dtx$mz,dtx$ccs,dtx$intensity,mz_ppm,ccs_tolerance,snr,mz_bins,ccs_bins)
 fwrite(result,'ref2d.csv')
-# The columns are m/z, ccs and intensity for found peaks.
-# retain peaks larger than mean value of all reference peaks
-# sub <- result[result$intensity>mean(result$intensity),]
-# fwrite(sub,'ref2d.csv')
 ```
 
 # Quantitative Peaks List
@@ -133,8 +131,7 @@ ccs_tolerance <- 0.03
 # - yrange: The y-range of the region of interest.
 # - mz_ppm: The m/z tolerance in ppm.
 # - ccs_tolerance: The CCS tolerance.
-# - batch_size: The batch size of frames.
-getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange, mz_ppm = mz_ppm, ccs_tolerance = ccs_tolerance, batch_size = batch_size)
+getqlist(refpath = refpath,lib_path = lib_path, path = path, method = method, zero_proportion_cutoff = zero_proportion_cutoff, coordpath = coordpath, normpath = normpath, xrange = xrange, yrange = yrange, mz_ppm = mz_ppm, ccs_tolerance = ccs_tolerance)
 ```
 
 # Qualitative Peaks List
@@ -157,8 +154,8 @@ annofile = 'annoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
-# - ppm: annotation mass accuracy for m/z, default 20 (TOF)
-# - deltaccs: annotation absolute CCS shift in Å², default 5 (≈1.5–2.6% over 190–330 Å²)
+# - ppm: annotation mass accuracy for m/z, default 10
+# - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
@@ -176,18 +173,17 @@ annofile = 'metaannoccs.csv'
 # - mode: The ionization mode ('pos' or 'neg').
 # - peakpath: Path to the peak list file.
 # - annofile: The output file for the annotations. Results contain the database compounds' m/z and ccs in the first two columns and matched m/z and ccs in the reference peaks list. The following three columns contain name, formula, and adducts of this ions.
-# - ppm: annotation mass accuracy for m/z, default 20 (TOF)
-# - deltaccs: annotation absolute CCS shift in Å², default 5 (≈1.5–2.6% over 190–330 Å²)
+# - ppm: annotation mass accuracy for m/z, default 10
+# - deltaccs: annotation ccs shift, default 5 
 getanno(database = database,mode = mode, peakpath = peakpath, annofile = annofile)
 ```
 
 ## mzccsanno Shiny application
 
-You could also use a Shiny application to make annotation with GUI.
+You can also use the interactive online Shiny application to perform m/z–CCS annotation through a graphical interface:
 
-```{r}
-rmwf::runmzccsanno()
-```
+- Online Application: https://thejacksonlaboratory.shinyapps.io/mzccs
+- Alternatively, if `rmwf` is installed locally, launch via `rmwf::runmzccsanno()`.
 
 # Exploratory Analysis
 
@@ -312,7 +308,7 @@ perform_reactomics_analysis("ticmzccs.csv", "roireactomics.csv", locindex = loci
 ###  Visualization of certain reaction (PMD)
 
 ```{r}
-# This function clusters ions within a specific region of interest (ROI). This function will generate images for each clusters to help the user find the optimized cutoff.
+# This function visualizes the spatial distribution of precursor and product ions for a specified PMD reaction.
 # - "reactomics.csv": The output csv file from the reactomics analysis.
 # - pmd_values: pmd value to be visualized
 # - "pmd2.016.png": the figure name
@@ -321,75 +317,85 @@ save_pmd_images("reactomics.csv",pmd_values = 2.016,"pmd2.016.png")
 
 ## Molecular Network
 
-This part will generate network figure.
+This part will generate the spatial reactomics molecular network.
 
-The input is peak list csv file and annotation csv file, and the output is csv file for network generation.
+The input is the quantitative peak list csv file and qualitative annotation csv file, and the output is the network figure and csv file.
 
 ```{r}
-# This function generates a molecular network.
+# This function generates a molecular network using pmd and igraph.
 # - "ticmzccs.csv": The input peak csv file from quantitative peaks list.
 # - "ioncluster.csv": The ion cluster csv file from the ion cluster step.
 # - "annoccs.csv": The annotation csv file from qualitative peaks list.
-# - "molecular_network.csv": The output file for the molecular network.  The first two columns show the paired peaks of the edge, and the following two columns as m/z of paired peaks with following two columns as original and rounded mass distances. The next column is mass defect of peaks.
+# - "molecular_network.csv": The output file for the molecular network. The first two columns show the paired peaks of the edge, followed by m/z values, mass distances, and spatial co-localization.
 generate_molecular_network("ticmzccs.csv", "ioncluster.csv", "annoccs.csv", "molecular_network.csv")
 ```
 
 ### MSInet Shiny application
 
-Please run the following chunk to get the network csv file for MSInet shiny application.
+For interactive exploration of spatial molecular networks, you can use the online MSInet Shiny application:
+
+- Online Application: https://thejacksonlaboratory.shinyapps.io/msinet/
+
+Run the following chunks to generate the network table and per-ion spatial distribution images consumed by the MSInet interface.
 
 ```{r}
 library(pmd)
 library(data.table)
-dt <- fread("ticmzccs.csv",header = T)
-# load ion cluster csv file
+dt <- fread("ticmzccs.csv", header = TRUE)
 ioncluster <- fread('ioncluster.csv')
-library(pmd)
 data("sda")
-hfpmd <- round(sda$PMD,3)
-df <- rmwf::getpmddf2(dt,group = ioncluster$class,pmd=hfpmd,digits = 3)
-#  The first two columns show the paired peaks of the edge, and the following two columns as m/z of paired peaks with following two columns as original and rounded mass distances. The next column is mass defect of peaks and the next one is the spatial similarity of two ions. The following two columns are group number of ions if provided by the user based results from ion cluster analysis. The last column show if the the network is local or global based on the group number.
-fwrite(df,'msinet.csv')
+hfpmd <- round(sda$PMD, 3)
+
+# Extract network edges with high-frequency PMDs
+if (requireNamespace("rmwf", quietly = TRUE)) {
+  df <- rmwf::getpmddf2(dt, group = ioncluster$class, pmd = hfpmd, digits = 3)
+} else {
+  mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+  df <- pmd::getpmddf(mz, group = ioncluster$class, pmd = hfpmd, digits = 3)
+}
+fwrite(df, 'msinet.csv')
 ```
 
-Please run the following chunk to get figures for ions.
+Please run the following chunk to generate per-ion spatial images for network nodes:
 
 ```{r}
-# m/z and im
 dir.create('fig', showWarnings = FALSE)
-ions <- unique(c(df$from,df$to))
-mz <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) round(as.numeric(x[1]),4))
-im <- sapply(strsplit(colnames(dt)[-1],'_'),function(x) as.numeric(x[2]))
-name <- paste0(mz,'_',round(im))
-idx <- match(ions,name)+1
-sub <- as.data.frame(dt[,..idx])
-colnames(sub) <- ions
-x <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[1]))
-y <- sapply(strsplit(dt$location,'_'),function(x) as.numeric(x[2]))
-width=max(x)-min(x)+1
-height=max(y)-min(y)+1
-for(i in 1:ncol(sub)){
-  dfx <- sub[[i]]
-  rng <- max(dfx) - min(dfx)
-  norm <- if (rng > 0) (dfx - min(dfx)) / rng else rep(0, length(dfx))
-  color_palette <- colorRamp(c("skyblue", "red"))
-  color_sequence <- rgb(color_palette(norm)/255,alpha=1)
-  png(paste0('fig/',colnames(sub)[i],'.png'),width = width, height = height)
-  par(mar=c(0,0,0,0))
-  plot.new()
-  plot.window(xlim = c(0,width), ylim = c(0,height), xaxs = "i", yaxs = "i", asp = NA)
-  points(x-min(x)+1, y-min(y)+1, pch = 16, col = color_sequence,cex=0.3)
-  dev.off()
+ions <- unique(c(df$from, df$to))
+mz <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) round(as.numeric(x[1]), 4))
+im <- sapply(strsplit(colnames(dt)[-1], '_'), function(x) as.numeric(x[2]))
+name <- paste0(mz, '_', round(im))
+idx <- match(ions, name) + 1
+keep <- !is.na(idx) & idx <= ncol(dt)
+ions <- ions[keep]
+idx <- idx[keep]
+
+if (length(ions) > 0) {
+  sub <- as.data.frame(dt[, ..idx])
+  colnames(sub) <- ions
+  x <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[1]))
+  y <- sapply(strsplit(dt$location, '_'), function(x) as.numeric(x[2]))
+  width <- max(x) - min(x) + 1
+  height <- max(y) - min(y) + 1
+  for (i in 1:ncol(sub)) {
+    dfx <- sub[[i]]
+    rng <- max(dfx) - min(dfx)
+    norm <- if (rng > 0) (dfx - min(dfx)) / rng else rep(0, length(dfx))
+    color_palette <- colorRamp(c("skyblue", "red"))
+    color_sequence <- rgb(color_palette(norm) / 255, alpha = 1)
+    png(paste0('fig/', colnames(sub)[i], '.png'), width = width, height = height)
+    par(mar = c(0, 0, 0, 0))
+    plot.new()
+    plot.window(xlim = c(0, width), ylim = c(0, height), xaxs = "i", yaxs = "i", asp = NA)
+    points(x - min(x) + 1, y - min(y) + 1, pch = 16, col = color_sequence, cex = 0.3)
+    dev.off()
+  }
 }
 ```
 
-You can start the shiny app by the following code:
+You can upload the resulting network file (`msinet.csv` or `molecular_network.csv`), annotation file (`annoccs.csv`), and image folder (`fig/`) to the MSInet Shiny app:
 
-```{r}
-rmwf::runmsinet()
-```
-
-Then you could update network file (msinet.csv), annotation file (annoccs.csv) and images to generate network visualization for biological people.
+- Online: https://thejacksonlaboratory.shinyapps.io/msinet/
+- Alternatively, if `rmwf` is installed locally, launch via `rmwf::runmsinet()`.
 
 ```{r}
 sessionInfo()
